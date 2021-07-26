@@ -33,18 +33,13 @@ data {
 transformed data {
   int hospitalizations_mat[n_date, n_municipality];         
   matrix [n_date, n_municipality] load_municipality;           // loads by municipality
-  int municipality_pop_vec[n_municipality];
   real load_mat[n_date,n_municipality];
   int daysforanalysis = n_date - max_delay;
   
-  for( i in 1:n_municipality ){
-    municipality_pop_vec[i] = 0;
-  }
-  
+
   for( i in 1:n ){
       hospitalizations_mat[date[i],municipality[i]] = hospitalizations[i];
       load_mat[date[i], municipality[i]] = load[i];
-      municipality_pop_vec[municipality[i]] = municipality_pop_vec[municipality[i]] + municipality_pop[i];
   }
 }
 
@@ -64,7 +59,7 @@ transformed parameters {
     for ( n_obs in 1 : daysforanalysis ) { 
 	    int ttrue = max_delay + n_obs; 
 	    sum_load = 10^(load_mat[ttrue,i] - ref_load);
-	    log_likes_hospital[n_obs, i] = poisson_lpmf(hospitalizations_mat[ttrue,i] | hosp_rate[i] * sum_load * municipality_pop_vec[i]);
+	    log_likes_hospital[n_obs, i] = poisson_lpmf(hospitalizations_mat[ttrue,i] | hosp_rate[i] * sum_load * municipality_pop[i]);
 	  } 
   }
 }
@@ -89,7 +84,7 @@ generated quantities {
     for ( t in 1 : n_date ) {	//CHECK - OK
       if ( t > max_delay) {	//simplify for ms/github
 		    s_load = 10^(load_municipality[t,i] - ref_load);
-        x = hosp_rate[i] * s_load * municipality_pop_vec[i];
+        x = hosp_rate[i] * s_load * municipality_pop[i];
 	      expected_hospitalizations[t, i] = x;
         simulated_hospitalizations[t, i] = poisson_rng(x);
     } else {
