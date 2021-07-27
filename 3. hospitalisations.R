@@ -8,21 +8,23 @@ library( loo )
 
 setwd( here() )
 
-source( "functions.R")
-
 # select subset of data for regression analysis
 # based on frequency of sampling and start of vaccination
 # here we take September 2020 up to and including February 2021
 startday <- as.Date("2020-09-01")
-lastday <- as.Date("2021-04-12")
+lastday <- as.Date("2021-04-12")     # 2021-07-20
 
-load( "./output/fit_pspline_2021-07-07.rda" )
-load( "./output/posteriors_2021-07-07.rda")
+load( "./output/fit_pspline_2021-07-22.rda" )
+load( "./output/posteriors_2021-07-22.rda")
 load("df_viralload_human_regions.RData")
+
+df_viralload_human_regions <- ungroup(df_viralload_human_regions)
 
 df_fractions <- df_viralload_human_regions %>% 
   select( municipality, rwzi=RWZI, municipality_pop=Inwoneraantal_municipality, starts_with( "frac" )) %>% 
   unique()
+
+source( "functions.R")
 
 # Calculate median load per municipality from posterior
 #  also sums up the population in municipalities
@@ -31,10 +33,8 @@ df_muni <- df_posteriors %>%
   group_by( municipality,date ) %>% 
   slice_sample( n=10 ) %>% 
   ungroup() %>% 
-  calc_df_muni( ) %>% 
+  calc_df_muni() %>% 
   mutate( date=as.factor(date))
-
-rm( df_posteriors )
 
 # run Stan model
 fit_hospitalization = stan(
