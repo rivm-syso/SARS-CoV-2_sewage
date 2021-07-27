@@ -11,9 +11,10 @@ calc_df_muni <-function(df_posteriors){
     select( .draw, date, load, rwzi, municipality, hospitalizations ) %>%
     left_join(df_fractions ) %>% 
     mutate( load_muni = frac_municipality2RWZI * load ) %>% 
-    group_by( date, municipality, hospitalizations, .draw ) %>%
+    group_by( date, municipality, .draw ) %>%
     summarize( load = sum( load_muni ), 
                municipality_pop = sum(municipality_pop),
+               hospitalizations = first(hospitalizations),
                .groups="drop_last") %>% 
     group_by( date, municipality, hospitalizations, municipality_pop ) %>% 
     median_qi( load ) %>%

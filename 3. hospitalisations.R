@@ -18,6 +18,7 @@ load( "./output/fit_pspline_2021-07-22.rda" )
 load( "./output/posteriors_2021-07-22.rda")
 load("df_viralload_human_regions.RData")
 
+# just to be sure
 df_viralload_human_regions <- ungroup(df_viralload_human_regions)
 
 df_fractions <- df_viralload_human_regions %>% 
@@ -31,10 +32,13 @@ source( "functions.R")
 df_muni <- df_posteriors %>% 
   filter( as.Date(date) >= startday, as.Date(date) <= lastday ) %>%
   group_by( municipality,date ) %>% 
-  slice_sample( n=10 ) %>% 
+  sample_draws(10) %>%
   ungroup() %>% 
   calc_df_muni() %>% 
   mutate( date=as.factor(date))
+
+# Save df_muni
+save(df_muni,file = "df_muni.RData")
 
 # run Stan model
 fit_hospitalization = stan(
