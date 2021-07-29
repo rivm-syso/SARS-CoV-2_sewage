@@ -60,7 +60,7 @@ traceplot(fit_hospitalization, pars = c("hosp_rate[16]", "hosp_rate[249]", "hosp
 
 df_posteriors_hosp <- fit_hospitalization %>% 
   recover_types( df_muni ) %>% 
-  spread_draws( hosp_rate[municipality]) %>% 
+  spread_draws( c(expected_hospitalizations,simulated_hospitalizations)[date,municipality] ) %>% 
   left_join( df_muni )
 
 

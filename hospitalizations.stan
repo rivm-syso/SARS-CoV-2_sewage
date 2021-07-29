@@ -15,6 +15,9 @@
 /* update 6/3/2021: greatly simplified and cleanup: weighted past as predictor        */
 /* using truncated geometric distributions                                            */
 
+/* TODO: max_delay just throws away the first few days instead of modeling a shift 
+ between hospitalizations and viral loads. */
+
 
 data {
   int<lower=1> n;
@@ -32,7 +35,7 @@ data {
 
 transformed data {
   int hospitalizations_mat[n_date, n_municipality];         
-  matrix [n_date, n_municipality] load_municipality;           // loads by municipality
+  // matrix [n_date, n_municipality] load_municipality;           // loads by municipality
   real load_mat[n_date,n_municipality];
   int daysforanalysis = n_date - max_delay;
   
@@ -74,7 +77,7 @@ model {
 
 generated quantities {
   real log_lik = sum(log_likes_hospital);  // posterior log-likelihood; mode=1 to calculate WBIC
- /* real expected_hospitalizations[n_date, n_municipality]; // for calculation of credible intervals
+  real expected_hospitalizations[n_date, n_municipality]; // for calculation of credible intervals
   int simulated_hospitalizations[n_date, n_municipality]; // for calculation of prediction intervals
   real s_load;
   real x;
@@ -83,7 +86,7 @@ generated quantities {
   for ( i in 1 : n_municipality ) {
     for ( t in 1 : n_date ) {	//CHECK - OK
       if ( t > max_delay) {	//simplify for ms/github
-		    s_load = 10^(load_municipality[t,i] - ref_load);
+		    s_load = 10^(load_mat[t,i] - ref_load);
         x = hosp_rate[i] * s_load * municipality_pop[i];
 	      expected_hospitalizations[t, i] = x;
         simulated_hospitalizations[t, i] = poisson_rng(x);
@@ -92,7 +95,7 @@ generated quantities {
         simulated_hospitalizations[t, i] = 0;		 
 	  }
    } 
-  }*/ 
+  } 
 } 
 
 
