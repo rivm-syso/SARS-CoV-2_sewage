@@ -5,6 +5,9 @@ library(here)
 library(rstan)
 library( tidybayes )
 library( loo )
+library(furrr)
+
+plan(multisession, workers = 10)
 
 setwd( here() )
 
@@ -18,8 +21,7 @@ load( "./output/fit_pspline_2021-07-22.rda" )
 load( "./output/posteriors_2021-07-22.rda")
 load("df_viralload_human_regions.RData")
 
-# just to be sure
-df_viralload_human_regions <- ungroup(df_viralload_human_regions)
+load("df_viralload_human_regions.RData")
 
 df_fractions <- df_viralload_human_regions %>% 
   select( municipality, rwzi=RWZI, municipality_pop=Inwoneraantal_municipality, starts_with( "frac" )) %>% 
@@ -29,13 +31,7 @@ source( "functions.R")
 
 # Calculate median load per municipality from posterior
 #  also sums up the population in municipalities
-df_muni <- df_posteriors %>% 
-  filter( as.Date(date) >= startday, as.Date(date) <= lastday ) %>%
-  group_by( municipality,date ) %>% 
-  sample_draws(10) %>%
-  ungroup() %>% 
-  calc_df_muni() %>% 
-  mutate( date=as.factor(date))
+df_muni <- calc_df_muni(df_posteriors,startday,lastday)
 
 # Save df_muni
 save(df_muni,file = "df_muni.RData")

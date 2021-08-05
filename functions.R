@@ -6,19 +6,34 @@ if( !dir.exists(outdir_out)) dir.create(outdir_out)
 outdir_res = "./results/"
 if( !dir.exists(outdir_res)) dir.create(outdir_res)
 
-calc_df_muni <-function(df_posteriors){
+calc_df_muni <-function(df_posteriors,startday,lastday){
   df_posteriors %>% 
+    filter( as.Date(date) >= startday, as.Date(date) <= lastday ) %>%
+    group_by( municipality,date ) %>% 
+    sample_draws(10) %>%
+    ungroup() %>% 
     select( .draw, date, load, rwzi, municipality, hospitalizations ) %>%
-    left_join(df_fractions ) %>% 
+    left_join(df_fractions, by = c("rwzi","municipality") ) %>% 
     mutate( load_muni = frac_municipality2RWZI * load ) %>% 
     group_by( date, municipality, .draw ) %>%
     summarize( load = sum( load_muni ), 
                municipality_pop = sum(municipality_pop),
                hospitalizations = first(hospitalizations),
                .groups="drop_last") %>% 
-    group_by( date, municipality, hospitalizations, municipality_pop ) %>% 
-    median_qi( load ) %>%
-    mutate( date=as.Date(as.character(date)))
+    group_by( date, municipality ) %>% 
+    # Use parallel computing for speed
+    group_split() %>%
+    future_map(function(df){summarize(df, load = median(load), # Median_qi can also be used
+                                      # Then we first have to group df, and then apply 
+                                      # median_qi. Does make the code a bit slower.
+                                      date = first(date),
+                                      municipality = first(municipality),
+                                      hospitalizations = first(hospitalizations),
+                                      municipality_pop = first(municipality_pop))} ) %>%
+    bind_rows() %>%
+    mutate( date=as.Date(as.character(date))) %>%
+    mutate( date = as.factor(date)) %>%
+    mutate( date=as.factor(date))
 }
 
 read_df_sewage <- function( df_viralload_human_regions ){
@@ -58,7 +73,7 @@ initials_hosp = function() {
   return(list(
     mean_hosp_rate = 3.0,
     sigma_hosprate = 2,
-    hosp_rate = rep(2.5, length( levels( df_posteriors$municipality)))
+    hosp_rate = rep(2.5, length( unique( df_muni$municipality )))
   ))
 }
 # 
