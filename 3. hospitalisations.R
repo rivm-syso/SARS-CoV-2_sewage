@@ -34,7 +34,7 @@ source( "functions.R")
 df_muni <- calc_df_muni(df_posteriors,startday,lastday)
 
 # Save df_muni
-save(df_muni,file = "df_muni.RData")
+save(df_muni,file = "df_muni_parallel.RData")
 
 # run Stan model
 fit_hospitalization = stan(
@@ -56,7 +56,9 @@ traceplot(fit_hospitalization, pars = c("hosp_rate[16]", "hosp_rate[249]", "hosp
 
 df_posteriors_hosp <- fit_hospitalization %>% 
   recover_types( df_muni ) %>% 
-  spread_draws( c(expected_hospitalizations,simulated_hospitalizations)[date,municipality] ) %>% 
+  stan_split() %>%
+  future_map(function(x){spread_draws(x,c(expected_hospitalizations,simulated_hospitalizations)[date,municipality])}) %>% 
+  bind_rows() %>%
   left_join( df_muni )
 
 
@@ -72,6 +74,6 @@ loo(LL, r_eff=r_eff)
 rm(r_eff)
 
 # save, rmeove, and load fit
-save(fit_hospitalization, file = str_c( outdir_out, "fit_hosp_", Sys.Date(), ".rda"))
-save(df_posteriors_hosp, df_fractions, file = str_c( outdir_out, "posteriors_hosp", Sys.Date(), ".rda"))
+save(fit_hospitalization, file = str_c( outdir_out, "fit_hosp_parallel", Sys.Date(), ".rda"))
+save(df_posteriors_hosp, df_fractions, file = str_c( outdir_out, "posteriors_hosp_parallel", Sys.Date(), ".rda"))
 
