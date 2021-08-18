@@ -14,9 +14,17 @@ calc_df_muni <-function(df_posteriors,startday,lastday){
     ungroup() %>% 
     select( .draw, date, load, rwzi, municipality, hospitalizations ) %>%
     left_join(df_fractions, by = c("rwzi","municipality") ) %>% 
-    mutate( load_muni = frac_municipality2RWZI * load ) %>% 
+    mutate( load_muni = frac_municipality2RWZI * load,
+            age_muni = frac_municipality2RWZI * age,
+            # We missen de leeftijden van Zuidhorn, Marum, en Gaarkeuken.
+            # Om NAs te voorkomen, maken we frac_m2R NA. If we have those
+            # ages, the following line can be deleted, and frac_m2R will add
+            # to 1, so in summarize we don't have to divide by frac_m2R
+            frac_municipality2RWZI = if_else(is.na( age_muni ),as.numeric(NA),
+                                             frac_municipality2RWZI)) %>% 
     group_by( date, municipality, .draw ) %>%
     summarize( load = sum( load_muni ), 
+               age = sum( age_muni, na.rm = T )/sum( frac_municipality2RWZI, na.rm = T),
                municipality_pop = sum(municipality_pop),
                hospitalizations = first(hospitalizations),
                .groups="drop_last") %>% 
@@ -29,11 +37,38 @@ calc_df_muni <-function(df_posteriors,startday,lastday){
                                       date = first(date),
                                       municipality = first(municipality),
                                       hospitalizations = first(hospitalizations),
-                                      municipality_pop = first(municipality_pop))} ) %>%
+                                      municipality_pop = first(municipality_pop),
+                                      age = first(age))} ) %>%
     bind_rows() %>%
     mutate( date=as.Date(as.character(date))) %>%
+    # Add the percentage of vaccinations
+    mutate(week = format(date, "%G-%V")) %>%
+    left_join(df_vaccins, by = c("municipality","week")) %>%
+    mutate(percentage_vax = if_else(is.na(percentage_vax),0,percentage_vax)) %>%
+    select(-week) %>%
     mutate( date = as.factor(date)) %>%
     mutate( date=as.factor(date))
+}
+
+calc_vax <- function(df_vaccins){
+  df_vaccins %>%
+    mutate(Week_1eprik = format(as.Date(Week_1eprik, origin = "1899-12-30"),"%G-%V")) %>%
+    select("week" = "Week_1eprik",
+           "municipality" = "Gemeente",
+           "age_group" = "Leeftijdsgroep5",
+           "age_population" = "Populatie",
+           "percentage_vax" = "Vaccinatiegraad_coronit_cims") %>%
+    # Namen verbeteren
+    mutate(municipality = str_remove(municipality,"^\'"),           # Den Haag & Bosch 
+           municipality = str_remove(municipality," \\(O\\.\\)"),   # Hengelo
+           municipality = str_replace(municipality,",","."),        # Nuenen etc.
+           municipality = str_replace(municipality,"â","a"),        # Fryslan
+           municipality = str_replace(municipality,"ú","u"))  %>%   # Sudwest Fryslan
+    # Percentages kunnen nooit meer dan 1 zijn.
+    mutate(percentage_vax = if_else(percentage_vax > 100,100,percentage_vax)) %>%
+    # Determine the percentage of people with vaccinations
+    group_by(week,municipality) %>%
+    summarize(percentage_vax = sum(percentage_vax/100 * age_population, na.rm = T)/sum(age_population, na.rm = T))
 }
 
 read_df_sewage <- function( df_viralload_human_regions ){
@@ -96,7 +131,7 @@ probdetection = function(x, x0, k) {
 }
 
 # Split the model fit for future map
-stan_split <- function(fit_hospitalization){
+stan_split <- function(fit_hospitalization,num_groups){
   
   places <- 1:fit_hospitalization@sim[["n_flatnames"]]
   # Find the positions of the expected hospitalizations
@@ -113,17 +148,17 @@ stan_split <- function(fit_hospitalization){
   # We divide the results in (almost) equally sized lists
   n_chains <- fit_hospitalization@sim[["chains"]]
   n_days <- fit_hospitalization@par_dims[["expected_hospitalizations"]][[1]]
-  n_muni <- floor(fit_hospitalization@par_dims[["expected_hospitalizations"]][[2]]/10)
+  n_muni <- floor(fit_hospitalization@par_dims[["expected_hospitalizations"]][[2]]/num_groups)
   muni_extra <- 0
   
   fit_hosp_list <- NULL
   
-  for(counter in 1:10){
+  for(counter in 1:num_groups){
     # We create a smaller stan-object
     fit_hosp_list_new <- fit_hospitalization
     
-    if(counter == 10){
-      muni_extra <- fit_hospitalization@par_dims[["expected_hospitalizations"]][[2]] - 10*n_muni
+    if(counter == num_groups){
+      muni_extra <- fit_hospitalization@par_dims[["expected_hospitalizations"]][[2]] - num_groups*n_muni
     }
     # We only keep a subset of the expected and simulated hospitalizations
     places_sub <- ((counter-1)*n_muni*n_days + 1):(counter*n_muni*n_days + muni_extra*n_days)

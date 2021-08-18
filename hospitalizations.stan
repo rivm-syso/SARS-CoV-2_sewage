@@ -27,6 +27,7 @@ data {
   int<lower=1> municipality_pop[n];
   int date[n];
   real<lower=0> load[n];
+  real<lower=0, upper = 1> percentage_vax[n];
   int hospitalizations[n];                                            // now included at the level of sewage plants
 
   int max_delay;                                                      // maximum shift between sewage data and hospitalizations
@@ -37,11 +38,12 @@ transformed data {
   int hospitalizations_mat[n_date, n_municipality];         
   // matrix [n_date, n_municipality] load_municipality;           // loads by municipality
   real load_mat[n_date,n_municipality];
+  real<lower=0, upper = 1> percentage_vax_mat[n_date,n_municipality];
   int daysforanalysis = n_date - max_delay;
   
-
   for( i in 1:n ){
       hospitalizations_mat[date[i],municipality[i]] = hospitalizations[i];
+      percentage_vax_mat[date[i],municipality[i]] = percentage_vax[i];
       load_mat[date[i], municipality[i]] = load[i];
   }
 }
@@ -51,18 +53,20 @@ parameters {
   real<lower = 0> mean_hosp_rate;                                      // hospitalization rates with random effect
   real<lower = 0> sigma_hosp_rate;                                     // hospitalization rates with random effect
   vector<lower = 0>[n_municipality] hosp_rate;                 // hospitalization rates with random effect 
+  real<lower = 0, upper = 1> prevention_vax;                  // effect of vaccination on hospitalizations
  }
 
 transformed parameters { 
   matrix [daysforanalysis, n_municipality] log_likes_hospital;   // log-likelihood contributions of hospitalization data
   real sum_load;
+  
 
   /* notice that this assumes sufficient padding of data to the left */
   for ( i in 1 : n_municipality ) { 
     for ( n_obs in 1 : daysforanalysis ) { 
 	    int ttrue = max_delay + n_obs; 
 	    sum_load = 10^(load_mat[ttrue,i] - ref_load);
-	    log_likes_hospital[n_obs, i] = poisson_lpmf(hospitalizations_mat[ttrue,i] | hosp_rate[i] * sum_load * municipality_pop[i]);
+	    log_likes_hospital[n_obs, i] = poisson_lpmf(hospitalizations_mat[ttrue,i] | hosp_rate[i] * sum_load * (1 - prevention_vax*percentage_vax_mat[ttrue,i]) * municipality_pop[i]);
 	  } 
   }
 }
@@ -71,6 +75,8 @@ model {
   /* (hyper)parameter for hospitalization rates */
   hosp_rate ~ gamma(sigma_hosp_rate * mean_hosp_rate, sigma_hosp_rate); 
  
+  /* hyper parameter effect of vaccination */
+  prevention_vax ~ uniform(0,1); // beta-distribution would be better
   /* log-likelihood contributions */
   target += sum(log_likes_hospital);  
 }
@@ -87,7 +93,7 @@ generated quantities {
     for ( t in 1 : n_date ) {	//CHECK - OK
       if ( t > max_delay) {	//simplify for ms/github
 		    s_load = 10^(load_mat[t,i] - ref_load);
-        x = hosp_rate[i] * s_load * municipality_pop[i];
+        x = hosp_rate[i] * s_load * (1 - prevention_vax*percentage_vax_mat[t,i]) * municipality_pop[i];
 	      expected_hospitalizations[t, i] = x;
         simulated_hospitalizations[t, i] = poisson_rng(x);
     } else {
