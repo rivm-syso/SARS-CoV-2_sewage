@@ -44,6 +44,8 @@ df_muni <- calc_df_muni(df_posteriors,startday,lastday)
 # Save df_muni
 save(df_muni,file = "df_muni_age.RData")
 
+future:::ClusterRegistry("stop")
+
 # run Stan model
 fit_hospitalization = stan(
   "hospitalizations.stan",
