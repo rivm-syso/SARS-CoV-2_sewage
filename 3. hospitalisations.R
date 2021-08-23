@@ -15,7 +15,7 @@ setwd( here() )
 # based on frequency of sampling and start of vaccination
 # here we take September 2020 up to and including February 2021
 startday <- as.Date("2020-09-01")
-lastday <- as.Date("2021-07-19")     # 2021-07-19   2021-04-12
+lastday <- as.Date("2021-08-15")     # 2021-04-12
 
 load( "./output/fit_pspline_2021-07-22.rda" )
 load( "./output/posteriors_2021-07-22.rda")
@@ -66,7 +66,7 @@ traceplot(fit_hospitalization, pars = c("prevention_vax","hosp_rate[16]", "hosp_
 
 df_posteriors_hosp <- fit_hospitalization %>% 
   recover_types( df_muni ) %>% 
-  stan_split(10) %>%
+  stan_split(10,c("expected_hospitalizations","simulated_hospitalizations")) %>%
   future_map(function(x){spread_draws(x,c(expected_hospitalizations,simulated_hospitalizations)[date,municipality])}) %>% 
   bind_rows() %>%
   left_join( df_muni )

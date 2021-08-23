@@ -131,24 +131,31 @@ probdetection = function(x, x0, k) {
 }
 
 # Split the model fit for future map
-stan_split <- function(fit_hospitalization,num_groups){
+stan_split <- function(fit_hospitalization,num_groups,parameters){
   
   places <- 1:fit_hospitalization@sim[["n_flatnames"]]
-  # Find the positions of the expected hospitalizations
-  place_exp_hosp <- places[str_detect(fit_hospitalization@sim[["fnames_oi"]],
-                                      "expected_hospitalizations")]
-  # Find the positions of the simulated hospitalizations
-  place_num_hosp <- places[str_detect(fit_hospitalization@sim[["fnames_oi"]],
-                                      "simulated_hospitalizations")]
+  
+  place_parameters <- NULL
+  place_rest <- "log_likes_hospital"
+  for(i in seq_len(length(parameters))){
+    # Find the positions of the expected hospitalizations
+    place_parameters[[i]] <- places[str_detect(fit_hospitalization@sim[["fnames_oi"]],
+                                               parameters[i])]
+    place_rest <- paste0(place_rest,"|",parameters[i])
+  }
+  
+  # Find the positions of the log_likes_hospital to get rid of most entries
+  place_log_like <- places[str_detect(fit_hospitalization@sim[["fnames_oi"]],
+                                      "log_likes_hospital")]
+  
   # Find the postion of all other variables
   place_rest <- places[str_detect(fit_hospitalization@sim[["fnames_oi"]],
-                                  "[expected|simulated]_hospitalizations",
-                                  negate = T)]
+                                  place_rest,negate = T)]
   
   # We divide the results in (almost) equally sized lists
   n_chains <- fit_hospitalization@sim[["chains"]]
-  n_days <- fit_hospitalization@par_dims[["expected_hospitalizations"]][[1]]
-  n_muni <- floor(fit_hospitalization@par_dims[["expected_hospitalizations"]][[2]]/num_groups)
+  n_days <- fit_hospitalization@par_dims[[parameters[1]]][[1]]
+  n_muni <- floor(fit_hospitalization@par_dims[[parameters[1]]][[2]]/num_groups)
   muni_extra <- 0
   
   fit_hosp_list <- NULL
@@ -158,29 +165,35 @@ stan_split <- function(fit_hospitalization,num_groups){
     fit_hosp_list_new <- fit_hospitalization
     
     if(counter == num_groups){
-      muni_extra <- fit_hospitalization@par_dims[["expected_hospitalizations"]][[2]] - num_groups*n_muni
+      muni_extra <- fit_hospitalization@par_dims[[parameters[1]]][[2]] - num_groups*n_muni
     }
     # We only keep a subset of the expected and simulated hospitalizations
     places_sub <- ((counter-1)*n_muni*n_days + 1):(counter*n_muni*n_days + muni_extra*n_days)
     # In case of the final worker, we have a bit more municipalities
     n_muni <- n_muni + muni_extra
     
+    place_hosp <- c(place_log_like[1],place_rest)
+    for(i in seq_len(length(parameters))){
+      place_hosp <- c(place_hosp,place_parameters[[i]][places_sub])
+    }
     # We find the places of the results we keep and those we discard
-    place_hosp <- sort(c(place_exp_hosp[places_sub],
-                         place_num_hosp[places_sub],
-                         place_rest))
+    place_hosp <- sort(place_hosp)
     place_discard <- sort(setdiff(places,place_hosp))
     
     # The dimension of the expected/simulated hospitalizations is n_days and n_muni
-    fit_hosp_list_new@par_dims[["expected_hospitalizations"]][[2]] <- n_muni
-    fit_hosp_list_new@par_dims[["simulated_hospitalizations"]][[2]] <- n_muni
+    # fit_hosp_list_new@par_dims[["expected_hospitalizations"]][[2]] <- n_muni
+    # fit_hosp_list_new@par_dims[["simulated_hospitalizations"]][[2]] <- n_muni
+    # fit_hosp_list_new@par_dims[["log_likes_hospital"]] <- c(1,1)
     
     for(i in 1:n_chains){
       fit_hosp_list_new@sim[["samples"]][[i]][place_discard] <- NULL
     }
     
-    fit_hosp_list_new@sim[["dims_oi"]][["expected_hospitalizations"]][[2]] <- n_muni
-    fit_hosp_list_new@sim[["dims_oi"]][["simulated_hospitalizations"]][[2]] <- n_muni
+    for(i in seq_len(length(parameters))){
+      fit_hosp_list_new@sim[["dims_oi"]][[parameters[i]]][[2]] <- n_muni
+    }
+    fit_hosp_list_new@sim[["dims_oi"]][["log_likes_hospital"]] <- c(1,1)
+    
     
     fit_hosp_list_new@sim[["fnames_oi"]] <- fit_hosp_list_new@sim[["fnames_oi"]][place_hosp]
     fit_hosp_list_new@sim[["n_flatnames"]] <- length(fit_hosp_list_new@sim[["fnames_oi"]])
@@ -190,5 +203,6 @@ stan_split <- function(fit_hospitalization,num_groups){
   
   return(fit_hosp_list)
 }
+
 
 
