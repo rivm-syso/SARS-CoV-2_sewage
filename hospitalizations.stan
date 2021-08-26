@@ -30,6 +30,7 @@ data {
   real<lower=0, upper = 1> percentage_vax[n];
   int hospitalizations[n];                                            // now included at the level of sewage plants
 
+  int delay_vax;                                                      // delay between vaccination and effectiveness
   int max_delay;                                                      // maximum shift between sewage data and hospitalizations
   int ref_load;                                                       // reference sewage load for hospitalization rates
 }
@@ -46,6 +47,19 @@ transformed data {
       percentage_vax_mat[date[i],municipality[i]] = percentage_vax[i];
       load_mat[date[i], municipality[i]] = load[i];
   }
+  
+  for( n_obs in 1:n_date){
+    // This assumes that the first data is before vaccination started, and we
+    // implement the delay already. We start from the last day
+    if(n_date - n_obs + 1 - delay_vax <= 0){
+      for(i in 1:n_municipality){
+          percentage_vax_mat[n_date - n_obs + 1,i] = 0;
+      }
+    } else {
+        percentage_vax_mat[n_date - n_obs + 1,] = percentage_vax_mat[n_date - n_obs + 1 - delay_vax,];
+    }
+  }
+  
 }
 
 parameters {
@@ -103,7 +117,3 @@ generated quantities {
    } 
   } 
 } 
-
-
-
-

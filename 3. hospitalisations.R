@@ -17,8 +17,8 @@ setwd( here() )
 startday <- as.Date("2020-09-01")
 lastday <- as.Date("2021-08-15")     # 2021-04-12
 
-load( "./output/fit_pspline_2021-07-22.rda" )
-load( "./output/posteriors_2021-07-22.rda")
+#load( "./output/fit_pspline_2021-07-22.rda" )
+load( "./output/posteriors_2021-08-25.rda")
 load("df_viralload_human_regions_agegroups.RData")
 
 df_fractions <- df_viralload_human_regions_agegroups %>% 
@@ -53,6 +53,7 @@ fit_hospitalization = stan(
   data = compose_data(
           max_delay = 0,
           ref_load = 19,
+          delay_vax = 14,
           df_muni),
   init = initials_hosp,
   chains = 4,
