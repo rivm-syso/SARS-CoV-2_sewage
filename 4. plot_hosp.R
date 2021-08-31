@@ -33,6 +33,41 @@ df_posteriors_hosp %>%
 
 stop("Tot hier")
 
+df_posteriors_hosp %>% 
+  group_by(municipality,date) %>% 
+  summarize(hosp_per_million = first(hospitalizations)/first(municipality_pop)*10^6,
+            load = first(load), 
+            percentage_vax = first(percentage_vax),
+            .groups = "drop_last") %>%
+  mutate(vax_delay = lag(percentage_vax,14,default = 0),
+         date = as.Date(date),
+         delta_dom = if_else(date > as.Date("2021-06-28"),"Y","N")) %>%
+  group_split() %>%
+  lapply(function(x){
+    x <- mutate(x,vax_delay = if_else(vax_delay == 0,
+                                      runif(nrow(x),-0.25,0),
+                                      vax_delay))
+    p <- ggplot(x) + geom_point(aes(x = load, y = vax_delay, 
+                                    color = hosp_per_million,
+                                    shape = delta_dom)) +
+      scale_colour_gradientn(colours=rainbow(6)) +
+      ylab("Vaccinatiegraad 2 weken terug") +
+      xlab("log load (modeluitkomst)") +
+      ggtitle(x$municipality[1])
+    
+    ggsave( paste0( outdir_fig,"Virusvracht_ziekenhuis_vaccin/", x$municipality[1], ".png"),
+            plot = p, width = 6.5, height = 4.5, units = "in")
+    
+  })
+
+
+
+
+
+
+
+
+
 
 # make figure for manuscript
 color = cbPalette[7]
