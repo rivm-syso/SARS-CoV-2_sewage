@@ -12,21 +12,11 @@ calc_df_muni <-function(df_posteriors,startday,lastday){
     group_by( municipality,date ) %>% 
     sample_draws(10) %>%
     ungroup() %>% 
-    select( .draw, date, load, rwzi, municipality, hospitalizations ) %>%
+    select( .draw, date, load, rwzi, municipality ) %>%
     left_join(df_fractions, by = c("rwzi","municipality") ) %>% 
-    mutate( load_muni = frac_municipality2RWZI * load,
-            age_muni = frac_municipality2RWZI * age,
-            # We missen de leeftijden van Zuidhorn, Marum, en Gaarkeuken.
-            # Om NAs te voorkomen, maken we frac_m2R NA. If we have those
-            # ages, the following line can be deleted, and frac_m2R will add
-            # to 1, so in summarize we don't have to divide by frac_m2R
-            frac_municipality2RWZI = if_else(is.na( age_muni ),as.numeric(NA),
-                                             frac_municipality2RWZI)) %>% 
+    mutate( load_muni = frac_municipality2RWZI * load) %>% 
     group_by( date, municipality, .draw ) %>%
-    summarize( load = sum( load_muni ), 
-               age = sum( age_muni, na.rm = T )/sum( frac_municipality2RWZI, na.rm = T),
-               municipality_pop = sum(municipality_pop),
-               hospitalizations = first(hospitalizations),
+    summarize( load = sum( load_muni ),
                .groups="drop_last") %>% 
     group_by( date, municipality ) %>% 
     # Use parallel computing for speed
@@ -35,40 +25,51 @@ calc_df_muni <-function(df_posteriors,startday,lastday){
                                       # Then we first have to group df, and then apply 
                                       # median_qi. Does make the code a bit slower.
                                       date = first(date),
-                                      municipality = first(municipality),
-                                      hospitalizations = first(hospitalizations),
-                                      municipality_pop = first(municipality_pop),
-                                      age = first(age))} ) %>%
+                                      municipality = first(municipality))} ) %>%
     bind_rows() %>%
-    mutate( date=as.Date(as.character(date))) %>%
-    # Add the percentage of vaccinations
-    mutate(week = format(date, "%G-%V")) %>%
-    left_join(df_vaccins, by = c("municipality","week")) %>%
-    mutate(percentage_vax = if_else(is.na(percentage_vax),0,percentage_vax)) %>%
-    select(-week) %>%
-    mutate( date = as.factor(date)) %>%
-    mutate( date=as.factor(date))
+    # Add the vaccinations, age, and hospitalizations
+    left_join(df_vaccins, by = c("municipality","date")) %>%
+    mutate( date = as.factor(date),
+            age_group = as.factor(age_group))
 }
 
-calc_vax <- function(df_vaccins){
-  df_vaccins %>%
-    mutate(Week_1eprik = format(as.Date(Week_1eprik, origin = "1899-12-30"),"%G-%V")) %>%
+# Nog even goed kijken naar startdatum en einddatum hierin verwerken
+calc_vax <- function(df_vaccins,df_ziekenhuisopnames){
+  df_vaccins <- df_vaccins %>%
+    filter(between(as.Date(Week_1eprik),startday,lastday)) %>%
+    mutate(Week_1eprik = format(Week_1eprik,"%G-%V")) %>%
     select("week" = "Week_1eprik",
            "municipality" = "Gemeente",
            "age_group" = "Leeftijdsgroep5",
            "age_population" = "Populatie",
            "percentage_vax" = "Vaccinatiegraad_coronit_cims") %>%
+    # Percentages kunnen nooit meer dan 1 zijn.
+    mutate(percentage_vax = if_else(percentage_vax > 100,1,percentage_vax/100)) %>%
+    filter(age_group != "Niet vermeld")
+  
+  df_ziekenhuisopnames <- df_ziekenhuisopnames %>%
+    filter(between(as.Date(Date_of_statistics),startday,lastday)) %>%
+    select("date" = "Date_of_statistics",
+           "municipality" = "Gemeente",
+           "age_group" = "Leeftijdsgroep5",
+           "hospitalizations" = "Hospital_admission") %>%
+    mutate(week = format(as.Date(date),"%G-%V")) %>%
+    # Eerst voegen we de populaties toe aan de vaccinatiedata
+    left_join(df_vaccins %>% select(municipality,age_group,age_population) %>% unique(),
+                                by = c("municipality","age_group")) %>%
+    # Daarna voegen we de vaccinaties toe, en vullen die aan met nullen
+    left_join(df_vaccins %>% select(municipality,age_group,week,percentage_vax) %>% unique(),
+              by = c("municipality","age_group","week")) %>%
+    mutate(percentage_vax = if_else(is.na(percentage_vax),0,percentage_vax)) %>%
+    select( - week) %>%
     # Namen verbeteren
     mutate(municipality = str_remove(municipality,"^\'"),           # Den Haag & Bosch 
            municipality = str_remove(municipality," \\(O\\.\\)"),   # Hengelo
            municipality = str_replace(municipality,",","."),        # Nuenen etc.
            municipality = str_replace(municipality,"â","a"),        # Fryslan
-           municipality = str_replace(municipality,"ú","u"))  %>%   # Sudwest Fryslan
-    # Percentages kunnen nooit meer dan 1 zijn.
-    mutate(percentage_vax = if_else(percentage_vax > 100,100,percentage_vax)) %>%
-    # Determine the percentage of people with vaccinations
-    group_by(week,municipality) %>%
-    summarize(percentage_vax = sum(percentage_vax/100 * age_population, na.rm = T)/sum(age_population, na.rm = T))
+           municipality = str_replace(municipality,"ú","u"))        # Sudwest Fryslan
+
+  return(df_ziekenhuisopnames)
 }
 
 read_df_sewage <- function( df_viralload_human_regions ){
@@ -108,7 +109,9 @@ initials_hosp = function() {
   return(list(
     mean_hosp_rate = 3.0,
     sigma_hosprate = 2,
-    hosp_rate = rep(2.5, length( unique( df_muni$municipality )))
+    hosp_rate = rep(2.5, length( unique( df_muni$municipality ))),
+    hosp_rate_age = rep(.5, length( unique( df_muni$age_group)) - 1),
+    prevention_vax = rep(.8, length( unique( df_muni$age_group)))
   ))
 }
 # 
@@ -192,7 +195,8 @@ stan_split <- function(fit_hospitalization,num_groups,parameters){
     for(i in seq_len(length(parameters))){
       fit_hosp_list_new@sim[["dims_oi"]][[parameters[i]]][[2]] <- n_muni
     }
-    fit_hosp_list_new@sim[["dims_oi"]][["log_likes_hospital"]] <- c(1,1)
+    fit_hosp_list_new@sim[["dims_oi"]][["log_likes_hospital"]] <- 
+      rep(1,length(fit_hosp_list_new@sim[["dims_oi"]][["log_likes_hospital"]]))
     
     
     fit_hosp_list_new@sim[["fnames_oi"]] <- fit_hosp_list_new@sim[["fnames_oi"]][place_hosp]
