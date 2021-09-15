@@ -29,10 +29,13 @@ calc_df_muni <-function(df_posteriors,startday,lastday){
     bind_rows() %>%
     # Add the vaccinations, age, and hospitalizations
     left_join(df_vaccins, by = c("municipality","date")) %>%
-    mutate( age = str_extract(age_group,"^[0-9]+"),
-            age = as.numeric(age) + 2.5,
-            date = as.factor(date),
-            age_group = as.factor(age_group))
+    group_by(date,municipality) %>%
+    summarize(date= first(date),
+              load = first(load),
+              hospitalizations = sum(hospitalizations),
+              percentage_vax = sum(percentage_vax * population) / sum(population),
+              population = sum(population)) %>%
+    ungroup()
 }
 
 # Nog even goed kijken naar startdatum en einddatum hierin verwerken
@@ -112,7 +115,6 @@ initials_hosp = function() {
     mean_hosp_rate = 3.0,
     sigma_hosprate = 2,
     hosp_rate = rep(2.5, length( unique( df_muni$municipality ))),
-    hosp_rate_age = c(.5,.5),
     prevention_vax = 0.8
     # hosp_rate_age = rep(.5, length( unique( df_muni$age_group)) - 1),
     # prevention_vax = rep(.8, length( unique( df_muni$age_group)))
@@ -138,26 +140,38 @@ probdetection = function(x, x0, k) {
 }
 
 # Split the model fit for future map
-stan_split <- function(fit_hospitalization,num_groups,parameters){
-  
+stan_split <- function(fit_hospitalization,num_groups,parameters,par_ignore){
+  # We split the fit of the model, fit_hospitalizations in multiple groups along
+  # the second dimension of the parameters of interest.
+  # num_groups is the number of groups we create
+  # parameters is a vector of strings of the parameters of interest, i.e. the
+  # parameters we want to extract from the model
+  # par_ignore is a vector of strings of parameters which are also of high dimension.
+  # To make sure we can parallize spread_draws, we already throw out most of these results.
   places <- 1:fit_hospitalization@sim[["n_flatnames"]]
   
+  # We create to integer vectors where the results from the parameters are. place_rest
+  # will be a vector of all other results.
   place_parameters <- NULL
-  place_rest <- "log_likes_hospital"
+  place_log_like <- NULL
+  place_rest <- NULL
+  
+  # We find the positions of the parameters we want to extract from the model
   for(i in seq_len(length(parameters))){
-    # Find the positions of the expected hospitalizations
     place_parameters[[i]] <- places[str_detect(fit_hospitalization@sim[["fnames_oi"]],
                                                parameters[i])]
-    place_rest <- paste0(place_rest,"|",parameters[i])
+    place_rest <- c(place_rest,place_parameters[[i]])
   }
   
-  # Find the positions of the log_likes_hospital to get rid of most entries
-  place_log_like <- places[str_detect(fit_hospitalization@sim[["fnames_oi"]],
-                                      "log_likes_hospital")]
-  
+  # We find the positions of the parameters of which we want to forget most entries
+  for(i in seq_len(length(par_ignore))){
+    place_log_like[[i]] <- places[str_detect(fit_hospitalization@sim[["fnames_oi"]],
+                                               par_ignore[i])]
+    place_rest <- c(place_rest,place_log_like[[i]])
+  }
+
   # Find the postion of all other variables
-  place_rest <- places[str_detect(fit_hospitalization@sim[["fnames_oi"]],
-                                  place_rest,negate = T)]
+  place_rest <- sort(setdiff(places,place_rest))
   
   # We divide the results in (almost) equally sized lists
   n_chains <- fit_hospitalization@sim[["chains"]]
@@ -179,19 +193,19 @@ stan_split <- function(fit_hospitalization,num_groups,parameters){
     # In case of the final worker, we have a bit more municipalities
     n_muni <- n_muni + muni_extra
     
-    place_hosp <- c(place_log_like[1],place_rest)
+    # We find the place of this group only
+    place_hosp <- place_rest
     for(i in seq_len(length(parameters))){
       place_hosp <- c(place_hosp,place_parameters[[i]][places_sub])
     }
+    for(i in seq_len(length(par_ignore))){
+      place_hosp <- c(place_hosp,place_log_like[[i]][1])
+    }
+    
     # We find the places of the results we keep and those we discard
     place_hosp <- sort(place_hosp)
     place_discard <- sort(setdiff(places,place_hosp))
-    
-    # The dimension of the expected/simulated hospitalizations is n_days and n_muni
-    # fit_hosp_list_new@par_dims[["expected_hospitalizations"]][[2]] <- n_muni
-    # fit_hosp_list_new@par_dims[["simulated_hospitalizations"]][[2]] <- n_muni
-    # fit_hosp_list_new@par_dims[["log_likes_hospital"]] <- c(1,1)
-    
+
     for(i in 1:n_chains){
       fit_hosp_list_new@sim[["samples"]][[i]][place_discard] <- NULL
     }
@@ -199,8 +213,11 @@ stan_split <- function(fit_hospitalization,num_groups,parameters){
     for(i in seq_len(length(parameters))){
       fit_hosp_list_new@sim[["dims_oi"]][[parameters[i]]][[2]] <- n_muni
     }
-    fit_hosp_list_new@sim[["dims_oi"]][["log_likes_hospital"]] <- 
-      rep(1,length(fit_hosp_list_new@sim[["dims_oi"]][["log_likes_hospital"]]))
+    
+    for(i in seq_len(length(par_ignore))){
+      fit_hosp_list_new@sim[["dims_oi"]][[par_ignore[i]]] <- 
+        rep(1,length(fit_hosp_list_new@sim[["dims_oi"]][[par_ignore[1]]]))
+    }
     
     
     fit_hosp_list_new@sim[["fnames_oi"]] <- fit_hosp_list_new@sim[["fnames_oi"]][place_hosp]

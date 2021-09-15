@@ -63,7 +63,8 @@ traceplot(fit_hospitalization, pars = c("prevention_vax","hosp_rate[16]", "hosp_
 
 df_posteriors_hosp <- fit_hospitalization %>% 
   recover_types( df_muni ) %>% 
-  stan_split(10,c("expected_hospitalizations","simulated_hospitalizations")) %>%
+  stan_split(10,c("expected_hospitalizations","simulated_hospitalizations"),
+             c("hosp_parameter","sum_load")) %>%
   future_map(function(x){spread_draws(x,c(expected_hospitalizations,simulated_hospitalizations)[date,municipality])}) %>% 
   bind_rows() %>%
   left_join( df_muni )

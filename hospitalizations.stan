@@ -23,13 +23,10 @@ data {
   int<lower=1> n;
   int<lower = 1> n_municipality;                                      // number of regions (province, safety region, municipality)
   int<lower = 1> n_date;                                              // number of observation days 
-  int<lower = 1> n_age_group;
-  
+
   int<lower=1, upper=n_municipality> municipality[n];
   int date[n];
-  int age_group[n];
-  
-  vector<lower=0, upper = 100>[n] age;
+
   vector<lower=1>[n] population;
   vector<lower=0>[n] load;
   vector<lower=0, upper = 1>[n] percentage_vax;
@@ -42,11 +39,11 @@ data {
 }
 
 transformed data {
-  real<lower=0, upper = 1> percentage_vax_mat[n_date,n_municipality,n_age_group];
+  real<lower=0, upper = 1> percentage_vax_mat[n_date,n_municipality];
   vector<lower = 0, upper = 1>[n] percentage_vax_delay;
 
   for( i in 1:n ){
-      percentage_vax_mat[date[i],municipality[i],age_group[i]] = percentage_vax[i];
+      percentage_vax_mat[date[i],municipality[i]] = percentage_vax[i];
   }
   
   // Shift the vaccination data by delay_vax
@@ -54,7 +51,7 @@ transformed data {
     if(date[i] - delay_vax <= 0){
       percentage_vax_delay[i] = 0;
     } else {
-      percentage_vax_delay[i] = percentage_vax_mat[date[i]-delay_vax,municipality[i],age_group[i]];
+      percentage_vax_delay[i] = percentage_vax_mat[date[i]-delay_vax,municipality[i]];
     }
   }
   
@@ -65,7 +62,6 @@ parameters {
   real<lower = 0> mean_hosp_rate;                                      // hospitalization rates with random effect
   real<lower = 0> sigma_hosp_rate;                                     // hospitalization rates with random effect
   vector<lower = 0>[n_municipality] hosp_rate;                 // hospitalization rates with random effect 
-  simplex[2] hosp_rate_age;
   real<lower = 0, upper = 1> prevention_vax;       // effect of vaccination on hospitalizations
  }
 
@@ -81,7 +77,6 @@ model {
   
   for ( i in 1 : n){
      hosp_parameter[i] = hosp_rate[municipality[i]] * 
-                        (hosp_rate_age[1]*log(age[i]) + hosp_rate_age[2]) * 
                         sum_load[i] *
                         (1 - prevention_vax*percentage_vax_delay[i]) *
                         population[i];
@@ -100,7 +95,6 @@ generated quantities {
 
   for ( i in 1 : n){
      hosp_parameter[i] = hosp_rate[municipality[i]] *
-                        (hosp_rate_age[1]*log(age[i]) + hosp_rate_age[2]) *
                         sum_load[i] *
                         (1 - prevention_vax*percentage_vax_delay[i]) *
                         population[i];

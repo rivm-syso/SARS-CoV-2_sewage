@@ -1,10 +1,5 @@
 
 df_posteriors_hosp %>%
-  group_by(date,municipality,.draw,.chain,.iteration) %>%
-  summarize(hospitalizations = sum(hospitalizations),
-            load = first(load),
-            expected_hospitalizations = first(expected_hospitalizations),
-            simulated_hospitalizations = first(simulated_hospitalizations)) %>%
   group_by(date,municipality,hospitalizations,load) %>%
   #slice_sample( n=100 ) %>%
   median_qi(expected_hospitalizations,simulated_hospitalizations) %>%
