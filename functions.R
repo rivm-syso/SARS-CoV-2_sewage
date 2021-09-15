@@ -29,7 +29,9 @@ calc_df_muni <-function(df_posteriors,startday,lastday){
     bind_rows() %>%
     # Add the vaccinations, age, and hospitalizations
     left_join(df_vaccins, by = c("municipality","date")) %>%
-    mutate( date = as.factor(date),
+    mutate( age = str_extract(age_group,"^[0-9]+"),
+            age = as.numeric(age) + 2.5,
+            date = as.factor(date),
             age_group = as.factor(age_group))
 }
 
@@ -41,7 +43,7 @@ calc_vax <- function(df_vaccins,df_ziekenhuisopnames){
     select("week" = "Week_1eprik",
            "municipality" = "Gemeente",
            "age_group" = "Leeftijdsgroep5",
-           "age_population" = "Populatie",
+           "population" = "Populatie",
            "percentage_vax" = "Vaccinatiegraad_coronit_cims") %>%
     # Percentages kunnen nooit meer dan 1 zijn.
     mutate(percentage_vax = if_else(percentage_vax > 100,1,percentage_vax/100)) %>%
@@ -55,7 +57,7 @@ calc_vax <- function(df_vaccins,df_ziekenhuisopnames){
            "hospitalizations" = "Hospital_admission") %>%
     mutate(week = format(as.Date(date),"%G-%V")) %>%
     # Eerst voegen we de populaties toe aan de vaccinatiedata
-    left_join(df_vaccins %>% select(municipality,age_group,age_population) %>% unique(),
+    left_join(df_vaccins %>% select(municipality,age_group,population) %>% unique(),
                                 by = c("municipality","age_group")) %>%
     # Daarna voegen we de vaccinaties toe, en vullen die aan met nullen
     left_join(df_vaccins %>% select(municipality,age_group,week,percentage_vax) %>% unique(),
@@ -110,8 +112,10 @@ initials_hosp = function() {
     mean_hosp_rate = 3.0,
     sigma_hosprate = 2,
     hosp_rate = rep(2.5, length( unique( df_muni$municipality ))),
-    hosp_rate_age = rep(.5, length( unique( df_muni$age_group)) - 1),
-    prevention_vax = rep(.8, length( unique( df_muni$age_group)))
+    hosp_rate_age = c(.5,.5),
+    prevention_vax = 0.8
+    # hosp_rate_age = rep(.5, length( unique( df_muni$age_group)) - 1),
+    # prevention_vax = rep(.8, length( unique( df_muni$age_group)))
   ))
 }
 # 

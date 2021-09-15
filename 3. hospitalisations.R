@@ -37,8 +37,8 @@ df_vaccins <- calc_vax(readxl::read_excel("Vaccinatiegraad.xlsx"),
 df_muni <- calc_df_muni(df_posteriors,startday,lastday)
 
 # Save df_muni en df_vaccins
-save(df_vaccins,file = paste0(Sys.Date(),"df_vaccins_age.RData"))
-save(df_muni,file = paste0(Sys.Date(), "df_muni_age.RData"))
+save(df_vaccins,file = paste0(outdir_res,Sys.Date(),"df_vaccins_age.RData"))
+save(df_muni,file = paste0(outdir_res,Sys.Date(), "df_muni_age.RData"))
 
 future:::ClusterRegistry("stop")
 
