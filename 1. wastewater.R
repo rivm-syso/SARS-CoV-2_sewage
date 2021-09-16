@@ -3,6 +3,9 @@ library(here)
 library(rstan)
 library(loo)
 library( tidybayes )
+library(furrr)
+
+plan(multisession, workers = 10)
 
 ###
 # User Settings
@@ -24,7 +27,7 @@ source( "functions.R" )
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
-load( "/rivm/r/D114007 COVID-19/Surveillance/Modelering/Rioolwater/Generated data/df_viralload_human_regions.RData")
+load( "/r-schijf/D114007 COVID-19/Surveillance/Modelering/Rioolwater/Generated data/df_viralload_human_regions.RData")
 lastday <- min( lastday, max(df_viralload_human_regions$Datum))
 startday <- max( startday, min(df_viralload_human_regions$Datum))
     
@@ -60,9 +63,10 @@ fit <- stan(
 traceplot(fit, pars = c("k", "x0", "sigma_observations", "RWvar"))
 
 df_posteriors <- fit %>% 
-  recover_types( df_sewage ) %>% 
-  spread_draws( load[date,rwzi],
-                x0, k ) %>% 
+  recover_types( df_sewage ) %>%
+  stan_split(10,c("load"),c("a_individual","load_population","log_likes_water")) %>%
+  future_map(function(x){spread_draws(x,load[date,rwzi], x0, k )}) %>% 
+  bind_rows() %>%
   left_join( df_sewage ) # Get original data back in
 
 
