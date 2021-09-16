@@ -29,13 +29,10 @@ calc_df_muni <-function(df_posteriors,startday,lastday){
     bind_rows() %>%
     # Add the vaccinations, age, and hospitalizations
     left_join(df_vaccins, by = c("municipality","date")) %>%
-    group_by(date,municipality) %>%
-    summarize(date= first(date),
-              load = first(load),
-              hospitalizations = sum(hospitalizations),
-              percentage_vax = sum(percentage_vax * population) / sum(population),
-              population = sum(population)) %>%
-    ungroup()
+    mutate( age = str_extract(age_group,"^[0-9]+"),
+            age = as.numeric(age) + 2.5,
+            date = as.factor(date),
+            age_group = as.factor(age_group))
 }
 
 calc_vax <- function(df_vaccins,df_ziekenhuisopnames,startday,lastday){
@@ -121,9 +118,8 @@ initials_hosp = function() {
     mean_hosp_rate = 3.0,
     sigma_hosprate = 2,
     hosp_rate = rep(2.5, length( unique( df_muni$municipality ))),
-    prevention_vax = 0.8
-    # hosp_rate_age = rep(.5, length( unique( df_muni$age_group)) - 1),
-    # prevention_vax = rep(.8, length( unique( df_muni$age_group)))
+    hosp_rate_age = c(.5,.5),
+    prevention_vax = rep(.8, length( unique( df_muni$age_group)))
   ))
 }
 # 
