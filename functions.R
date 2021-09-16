@@ -38,19 +38,29 @@ calc_df_muni <-function(df_posteriors,startday,lastday){
     ungroup()
 }
 
-# Nog even goed kijken naar startdatum en einddatum hierin verwerken
-calc_vax <- function(df_vaccins,df_ziekenhuisopnames){
+calc_vax <- function(df_vaccins,df_ziekenhuisopnames,startday,lastday){
   df_vaccins <- df_vaccins %>%
-    filter(between(as.Date(Week_1eprik),startday,lastday)) %>%
-    mutate(Week_1eprik = format(Week_1eprik,"%G-%V")) %>%
-    select("week" = "Week_1eprik",
+    filter(between(as.Date(Datum_1eprik),startday,lastday)) %>%
+    select("date" = "Datum_1eprik",
            "municipality" = "Gemeente",
            "age_group" = "Leeftijdsgroep5",
            "population" = "Populatie",
            "percentage_vax" = "Vaccinatiegraad_coronit_cims") %>%
-    # Percentages kunnen nooit meer dan 1 zijn.
+    # Percentages kunnen nooit meer dan 1/100% zijn.
     mutate(percentage_vax = if_else(percentage_vax > 100,1,percentage_vax/100)) %>%
     filter(age_group != "Niet vermeld")
+  
+  # We match each municipality and age_group with the same number of population
+  # independent of the day, hence we make a help-tibble with the populations
+  df_vaccins_pop <- df_vaccins %>%
+    group_by(municipality,age_group) %>%
+    summarize(population = first(population)) %>%
+    ungroup()
+  
+  # Once we matched the population, we no longer need the population data 
+  # in the vaccination data
+  df_vaccins <- df_vaccins %>%
+    select(-population)
   
   df_ziekenhuisopnames <- df_ziekenhuisopnames %>%
     filter(between(as.Date(Date_of_statistics),startday,lastday)) %>%
@@ -58,15 +68,11 @@ calc_vax <- function(df_vaccins,df_ziekenhuisopnames){
            "municipality" = "Gemeente",
            "age_group" = "Leeftijdsgroep5",
            "hospitalizations" = "Hospital_admission") %>%
-    mutate(week = format(as.Date(date),"%G-%V")) %>%
     # Eerst voegen we de populaties toe aan de vaccinatiedata
-    left_join(df_vaccins %>% select(municipality,age_group,population) %>% unique(),
-                                by = c("municipality","age_group")) %>%
+    left_join(df_vaccins_pop,by = c("municipality","age_group")) %>%
     # Daarna voegen we de vaccinaties toe, en vullen die aan met nullen
-    left_join(df_vaccins %>% select(municipality,age_group,week,percentage_vax) %>% unique(),
-              by = c("municipality","age_group","week")) %>%
+    left_join(df_vaccins,by = c("municipality","age_group","date")) %>%
     mutate(percentage_vax = if_else(is.na(percentage_vax),0,percentage_vax)) %>%
-    select( - week) %>%
     # Namen verbeteren
     mutate(municipality = str_remove(municipality,"^\'"),           # Den Haag & Bosch 
            municipality = str_remove(municipality," \\(O\\.\\)"),   # Hengelo

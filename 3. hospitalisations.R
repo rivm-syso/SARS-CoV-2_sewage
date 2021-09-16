@@ -30,8 +30,9 @@ df_fractions <- df_viralload_human_regions %>%
 source( "functions.R")
 
 # Calculate the percentage of vaccinated individuals per municipality
-df_vaccins <- calc_vax(readxl::read_excel("Vaccinatiegraad.xlsx"),
-                       read.delim("Ziekenhuisopnames.txt", sep = " "))
+df_vaccins <- calc_vax(read.csv("Vaccinatiegraad.csv"),
+                       read.delim("Ziekenhuisopnames.txt", sep = " "),
+                       startday,lastday)
 # Calculate median load per municipality from posterior
 #  also sums up the population in municipalities
 df_muni <- calc_df_muni(df_posteriors,startday,lastday)
