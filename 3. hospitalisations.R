@@ -14,11 +14,11 @@ source( "functions.R")
 # based on frequency of sampling and start of vaccination
 # here we take September 2020 up to and including February 2021
 startday <- as.Date("2020-09-01")
-lastday <- as.Date("2021-04-12")
+lastday <- as.Date("2021-09-21")
 
-load( "./output/fit_pspline_2021-07-07.rda" )
-load( "./output/posteriors_2021-07-07.rda")
-load("df_viralload_human_regions.RData")
+load( "./output/fit_pspline_2021-09-21.rda" )
+load( "./output/posteriors_2021-09-21.rda")
+load( "/rivm/r/D114007 COVID-19/Surveillance/Modelering/Rioolwater/Generated data/df_viralload_human_regions.RData")
 
 df_fractions <- df_viralload_human_regions %>% 
   select( municipality, rwzi=RWZI, municipality_pop=Inwoneraantal_municipality, starts_with( "frac" )) %>% 

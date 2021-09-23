@@ -9,7 +9,7 @@ if( !dir.exists(outdir_res)) dir.create(outdir_res)
 calc_df_muni <-function(df_posteriors){
   df_posteriors %>% 
     select( .draw, date, load, rwzi, municipality, hospitalizations ) %>%
-    left_join(df_fractions ) %>% 
+    left_join(df_fractions, by = c("rwzi", "municipality") ) %>% 
     mutate( load_muni = frac_municipality2RWZI * load ) %>% 
     group_by( date, municipality, hospitalizations, .draw ) %>%
     summarize( load = sum( load_muni ), 
@@ -61,14 +61,6 @@ initials_hosp = function() {
   ))
 }
 
-df_muni <- df_posteriors %>% 
-  select( .draw, date, load, rwzi, municipality, hospitalizations ) %>%
-  left_join(df_fractions ) %>% 
-  mutate( load_muni = frac_municipality2RWZI * load ) %>% 
-  group_by( date, municipality, hospitalizations, .draw ) %>%
-  summarize( load = sum( load_muni ), .groups="drop_last") %>% 
-  median_qi( load ) %>%
-  mutate( date=as.Date(as.character(date))) 
 # colorblind-friendly scheme
 cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7") 
 

@@ -4,7 +4,7 @@ library( patchwork )
 
 source( "functions.R")
 
-load(file = str_c( outdir_out, "posteriors_2021-07-07.rda"))
+load(file = str_c( outdir_out, "posteriors_2021-09-21.rda"))
 
 ###
 # Plot prob of detection
@@ -139,7 +139,7 @@ df_posteriors %>%
 ###
 # Municipality level
 ###
-df_muni <- calc_df_muni <- function( df_posteriors )
+df_muni <- calc_df_muni( df_posteriors )
 
 df_muni %>% 
   group_by( municipality ) %>% 

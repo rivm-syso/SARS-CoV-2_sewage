@@ -13,6 +13,7 @@ lastday <- Sys.Date()
 num_knots     <- 10
 spline_degree <- 3
 n_chains <- 10
+
 setwd( here() )
 source( "functions.R" )
 
