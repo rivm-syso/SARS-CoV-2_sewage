@@ -10,6 +10,10 @@ setwd( here() )
 
 source( "functions.R")
 
+#options(buildtools.check = NULL)
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+
 # select subset of data for regression analysis
 # based on frequency of sampling and start of vaccination
 # here we take September 2020 up to and including February 2021
@@ -27,7 +31,9 @@ df_fractions <- df_viralload_human_regions %>%
 # Calculate median load per municipality from posterior
 #  also sums up the population in municipalities
 df_muni <- df_posteriors %>% 
-  filter( as.Date(date) >= startday, as.Date(date) <= lastday ) %>%
+  filter( as.Date(date) >= startday, 
+          as.Date(date) <= lastday,
+          !is.na(hospitalizations)) %>%
   group_by( municipality,date ) %>% 
   slice_sample( n=10 ) %>% 
   ungroup() %>% 
@@ -57,7 +63,7 @@ traceplot(fit_hospitalization, pars = c("hosp_rate[16]", "hosp_rate[249]", "hosp
 df_posteriors_hosp <- fit_hospitalization %>% 
   recover_types( df_muni ) %>% 
   spread_draws( hosp_rate[municipality]) %>% 
-  left_join( df_muni )
+  left_join( df_muni, by = "municipality" )
 
 
 # model selection based on predictive performance 

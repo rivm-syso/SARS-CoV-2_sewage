@@ -57,7 +57,7 @@ initials_hosp = function() {
   return(list(
     mean_hosp_rate = 3.0,
     sigma_hosprate = 2,
-    hosp_rate = rep(2.5, length( levels( df_posteriors$municipality)))
+    hosp_rate = rep(2.5, length( unique( df_muni$municipality)))
   ))
 }
 
