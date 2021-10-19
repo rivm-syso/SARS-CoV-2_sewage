@@ -21,26 +21,29 @@
 
 data {
   int<lower=1> n;
-  int<lower = 1> n_municipality;                                      // number of regions (province, safety region, municipality)
-  int<lower = 1> n_date;                                              // number of observation days 
-  int<lower = 1> n_age_group;
-  
+  int<lower = 1> n_municipality;  // number of regions (province, safety region, municipality)
+  int<lower = 1> n_date;          // number of observation days 
+  int<lower = 1> n_age_group;     // number of different age-groups                             
+
+  /* Classifications of the data */
   int<lower=1, upper=n_municipality> municipality[n];
-  int date[n];
-  int age_group[n];
-  
-  vector<lower=0, upper = 100>[n] age;
+  int<lower=1, upper=n_age_group> age_group[n];
+  int<lower=1, upper=n_date> date[n];
+
+  /* For vector-based calculations, we work exclusively with vectors */
   vector<lower=1>[n] population;
   vector<lower=0>[n] load;
-  vector<lower=0, upper = 1>[n] percentage_vax;
+  vector<lower=0,upper=1>[n] percentage_vax;
   
-  int hospitalizations[n];                                            // now included at the level of sewage plants
+  int hospitalizations[n];        // now included at the level of sewage plants
 
-  int delay_vax;                                                      // delay between vaccination and effectiveness
-  int max_delay;                                                      // maximum shift between sewage data and hospitalizations
-  int ref_load;                                                       // reference sewage load for hospitalization rates
+  int ref_load;                   // reference sewage load for hospitalization rates
+  int delay_vax;                  // Delay between administration of vaccin and effectiveness
+                                  // Perhaps make this another parameter
 }
 
+/* The vaccins have a delay between administration and effectiveness, hence we 
+shift the vaccination coverage in the data */
 transformed data {
   real<lower=0, upper = 1> percentage_vax_mat[n_date,n_municipality,n_age_group];
   vector<lower = 0, upper = 1>[n] percentage_vax_delay;
@@ -62,84 +65,67 @@ transformed data {
 
 parameters {
   /* hospitalization rates and hospitalization delay */
-  real<lower = 0> mean_hosp_rate;                                      // hospitalization rates with random effect
-  real<lower = 0> sigma_hosp_rate;                                     // hospitalization rates with random effect
-  vector<lower = 0>[n_municipality] hosp_rate;                 // hospitalization rates with random effect 
-  simplex[2] hosp_rate_age;
-  vector<lower = 0, upper = 1>[n_age_group] prevention_vax;       // effect of vaccination on hospitalizations
-
+  vector<lower = 0>[n_age_group] mean_hosp_rate;                 // hospitalization rates with random effect 
+  vector<lower = 0>[n_age_group] sigma_hosp_rate;
+  matrix<lower = 0>[n_age_group,n_municipality] hosp_rate;       // Can be slightly improved by making array of rowvectors
+  
+  vector<lower=0,upper=1>[n_age_group] prevention_vax;
 }
+
 
 model {
   vector[n] sum_load = exp( log(10) *(load - ref_load));
   vector[n] hosp_parameter;
-  /* (hyper)parameter for hospitalization rates */
-  hosp_rate ~ gamma(sigma_hosp_rate * mean_hosp_rate, sigma_hosp_rate); 
   
-  /* hyper parameter effect of vaccination */
-  prevention_vax ~ uniform(0,1); // beta-distribution would be better
-  /* log-likelihood contributions */
-  
-   for ( i in 1 : n){
-     hosp_parameter[i] = hosp_rate[municipality[i]] * 
-                        (hosp_rate_age[1]*log(age[i]) + hosp_rate_age[2]) * 
-                        sum_load[i] *
-                        (1 - prevention_vax[age_group[i]]*percentage_vax_delay[i]) *
-                        population[i];
+  /* For a slight increase in speed, we want to use vector-valued calculations */
+  vector[n] hosp_rate_vector;
+  vector[n] prevention_vax_vector;
+
+  for(i in 1:n){
+    hosp_rate_vector[i] = hosp_rate[age_group[i],municipality[i]];
+    prevention_vax_vector[i] = prevention_vax[age_group[i]];
   }
+
+  /* The hospitalizations ratios for each municipality is governed by the overall
+      hosp_rate for the concerning municipality */
+ for(i in 1:n_age_group){
+    hosp_rate[i,] ~ gamma(sigma_hosp_rate[i] * mean_hosp_rate[i], sigma_hosp_rate[i]);
+ }
+
+  hosp_parameter = hosp_rate_vector .*
+                    (1 - prevention_vax_vector .* percentage_vax_delay) .*
+                    sum_load .*
+                    population;
   
   hospitalizations ~ poisson(hosp_parameter);
 
 }
 
-generated quantities {
-  vector[n] sum_load = exp( log(10) *(load - ref_load));
-  vector[n] hosp_parameter;
-
-  matrix[n_date, n_municipality] expected_hospitalizations = rep_matrix(0,n_date, n_municipality); // for calculation of credible intervals
-  int simulated_hospitalizations[n_date, n_municipality] = rep_array(0,n_date, n_municipality); // for calculation of prediction intervals
-
-  for ( i in 1 : n){
-     hosp_parameter[i] = hosp_rate[municipality[i]] *
-                        (hosp_rate_age[1]*log(age[i]) + hosp_rate_age[2]) *
-                        sum_load[i] *
-                        (1 - prevention_vax[age_group[i]]*percentage_vax_delay[i]) *
-                        population[i];
-
-    expected_hospitalizations[date[i],municipality[i]] = expected_hospitalizations[date[i],municipality[i]] + hosp_parameter[i];
-    simulated_hospitalizations[date[i],municipality[i]] = simulated_hospitalizations[date[i],municipality[i]] + poisson_rng(hosp_parameter[i]);
-  }
-
-}
-
 // generated quantities {
 //   vector[n] sum_load = exp( log(10) *(load - ref_load));
-//   vector[n] hosp_parameter;
-//   vector[n] hosp_parameter_novax;
+//   real expected_hospitalizations[n_date,n_municipality,n_age_group];
+//   real expected_hospitalizations_cf[n_date,n_municipality,n_age_group];
 // 
-//   matrix[n_date, n_municipality] expected_hospitalizations = rep_matrix(0,n_date, n_municipality); // for calculation of credible intervals
-//   int simulated_hospitalizations[n_date, n_municipality] = rep_array(0,n_date, n_municipality); // for calculation of prediction intervals
-//   
-//   matrix[n_date, n_municipality] expected_hospitalizations_novax = rep_matrix(0,n_date, n_municipality); // for calculation of credible intervals
-//   int simulated_hospitalizations_novax[n_date, n_municipality] = rep_array(0,n_date, n_municipality); // for calculation of prediction intervals
+//   int simulated_hospitalizations[n_date,n_municipality,n_age_group];
+//   int simulated_hospitalizations_cf[n_date,n_municipality,n_age_group];
 // 
 //   for ( i in 1 : n){
-//      hosp_parameter[i] = hosp_rate[municipality[i]] * 
-//                         (hosp_rate_age[1]*log(age[i]) + hosp_rate_age[2]) * 
-//                         sum_load[i] *
-//                         (1 - prevention_vax*percentage_vax_delay[i]) *
-//                         population[i];
-//                         
-//     expected_hospitalizations[date[i],municipality[i]] = expected_hospitalizations[date[i],municipality[i]] + hosp_parameter[i];
-//     simulated_hospitalizations[date[i],municipality[i]] = simulated_hospitalizations[date[i],municipality[i]] + poisson_rng(hosp_parameter[i]);
-//   
-//     hosp_parameter_novax[i] = hosp_rate[municipality[i]] * 
-//                         (hosp_rate_age[1]*log(age[i]) + hosp_rate_age[2]) * 
+//       expected_hospitalizations[date[i],municipality[i],age_group[i]] =
+//                         hosp_rate[age_group[i],municipality[i]] *
+//                         (1 - prevention_vax[age_group[i]]*percentage_vax_delay[i]) *
 //                         sum_load[i] *
 //                         population[i];
 //                         
-//     expected_hospitalizations_novax[date[i],municipality[i]] = expected_hospitalizations_novax[date[i],municipality[i]] + hosp_parameter_novax[i];
-//     simulated_hospitalizations_novax[date[i],municipality[i]] = simulated_hospitalizations_novax[date[i],municipality[i]] + poisson_rng(hosp_parameter_novax[i]);
+//       simulated_hospitalizations[date[i],municipality[i],age_group[i]] =
+//                         poisson_rng(expected_hospitalizations[date[i],municipality[i],age_group[i]]);
+// 
+//       expected_hospitalizations_cf[date[i],municipality[i],age_group[i]] =
+//                         hosp_rate[age_group[i],municipality[i]] *
+//                         sum_load[i] *
+//                         population[i];
+//                         
+//       simulated_hospitalizations_cf[date[i],municipality[i],age_group[i]] =
+//                         poisson_rng(expected_hospitalizations_cf[date[i],municipality[i],age_group[i]]);
 //   }
 // 
 // }

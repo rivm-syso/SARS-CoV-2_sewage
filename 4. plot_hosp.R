@@ -1,28 +1,157 @@
+library(gridExtra)
 
-df_posteriors_hosp %>%
-  group_by(date,municipality,.draw,.chain,.iteration) %>%
-  summarize(hospitalizations = sum(hospitalizations),
-            load = first(load),
-            expected_hospitalizations = first(expected_hospitalizations),
-            simulated_hospitalizations = first(simulated_hospitalizations)) %>%
-  group_by(date,municipality,hospitalizations,load) %>%
+# We once use median_qi to prepare the fit for plotting to save time.
+df_plot_hosp <- df_posteriors_hosp %>%
+  bind_rows(group_by(.,date,municipality,.chain,.iteration,.draw) %>%
+              summarize(age_group = "Totaal",
+                        across(contains("hospitalizations"),sum),
+                        .groups = "drop")) %>%
+  # group_by(date,municipality) %>%
+  # group_split() %>%
+  # lapply(function(df){
+  #   bind_rows(df, group_by(df,.chain,.iteration,.draw) %>%
+  #               summarize(age_group = "Totaal",
+  #                         across(contains("hospitalizations"),sum),
+  #                         .groups = "drop"))
+  # }) %>%
+  # bind_rows() %>%
+  group_by(date,municipality,hospitalizations,age_group) %>%
   #slice_sample( n=100 ) %>%
-  median_qi(expected_hospitalizations,simulated_hospitalizations) %>%
+  median_qi(expected_hospitalizations,simulated_hospitalizations,
+            expected_hospitalizations_cf,simulated_hospitalizations_cf) %>%
+  mutate(date = as.Date(as.character(date))) %>%
+  group_by(municipality) %>%
+  group_split()
+
+save(df_plot_hosp,file = paste0(outdir_res,Sys.Date(), "df_plot.RData"))
+
+##### We plot the fitted hospitalizations for each municipality #####
+
+df_plot_hosp %>% future_map(function(x){
+    p <- list()
+    for(i in sort(unique(x$age_group))){
+      y <- filter(x, age_group == i)
+      p[[i]] <- ggplot(y, mapping = aes(x = date, y = expected_hospitalizations,
+                                        ymin = simulated_hospitalizations.lower, 
+                                        ymax = simulated_hospitalizations.upper)) +
+        geom_ribbon(alpha = 0.25) +
+        geom_line(color = cbPalette[6]) + 
+        geom_point(aes(y = hospitalizations), color = cbPalette[6], size = 2.5) +
+        scale_x_date("Date", date_breaks = "1 month", date_labels = "%m/%y") + 
+        scale_y_continuous("Hospitalizations") + 
+        coord_cartesian(ylim = c(0, max(y$simulated_hospitalizations.upper,
+                                        y$hospitalizations,
+                                        y$expected_hospitalizations)+1)) +
+        ggtitle(i) +
+        theme_bw(base_size = 20) +
+        theme(
+          plot.title = element_text(color = cbPalette[6]),
+          panel.grid.major = element_line(size = 0.7),
+          panel.grid.minor = element_blank(),
+          legend.position = "none"
+        )
+    }
+    
+    ggsave( paste0( outdir_fig,"Leeftijd/hosp_", x$municipality[1], ".png"),
+            plot = grid.arrange(p[[1]],p[[2]],p[[3]],p[[4]],p[[5]],p[[6]], nrow = 3),
+            width = 18, height = 10, units = "in")
+    
+    write_csv(x, paste0( outdir_out, "Leeftijd/hosp_",x$municipality[1], ".csv"))
+})
+
+#### We include the counter factuals in the case we did not have vaccinations ####
+
+df_plot_hosp %>% future_map(function(x){
+  p <- list()
+  for(i in sort(unique(x$age_group))){
+    y <- filter(x, age_group == i)
+    p[[i]] <- ggplot(y, mapping = aes(x = date, y = expected_hospitalizations,
+                                      ymin = simulated_hospitalizations.lower, 
+                                      ymax = simulated_hospitalizations.upper)) +
+      geom_ribbon(alpha = 0.25) +
+      geom_line(color = cbPalette[6]) + 
+      geom_ribbon(alpha = 0.25, mapping = aes(ymin = simulated_hospitalizations_cf.lower,
+                                              ymax = simulated_hospitalizations_cf.upper)) +
+      geom_line(color = cbPalette[7], mapping = aes(y = expected_hospitalizations_cf)) + 
+      geom_point(aes(y = hospitalizations), color = cbPalette[6], size = 2.5) +
+      scale_x_date("Date", date_breaks = "1 month", date_labels = "%m/%y") + 
+      scale_y_continuous("Hospitalizations") + 
+      coord_cartesian(ylim = c(0, max(y$simulated_hospitalizations.upper,
+                                      y$hospitalizations,
+                                      y$expected_hospitalizations)+1)) +
+      ggtitle(i) +
+      theme_bw(base_size = 20) +
+      theme(
+        plot.title = element_text(color = cbPalette[6]),
+        panel.grid.major = element_line(size = 0.7),
+        panel.grid.minor = element_blank(),
+        legend.position = "none"
+      )
+  }
+  
+  ggsave( paste0( outdir_fig,"Leeftijd/cf_hosp_", x$municipality[1], ".png"),
+          plot = grid.arrange(p[[1]],p[[2]],p[[3]],p[[4]],p[[5]],p[[6]], nrow = 3),
+          width = 18, height = 10, units = "in")
+  
+  write_csv(x, paste0( outdir_out, "Leeftijd/cf_hosp_",x$municipality[1], ".csv"))
+})
+
+stop("Tot hier")
+
+
+#### Leeftijdplaatjes ####
+
+df_posteriors_hosp_no_vax_age %>%
+  group_by(date,municipality,hospitalizations,load,age_group) %>%
+  #slice_sample( n=100 ) %>%
+  median_qi(expected_hospitalizations,simulated_hospitalizations,hosp_rate) %>%
   mutate(date = as.Date(as.character(date))) %>%
   group_by(municipality) %>%
   group_split()%>%
   lapply(function(x){
-    p <- ggplot(x, mapping = aes(x = date, y = expected_hospitalizations,
-                                            ymin = simulated_hospitalizations.lower, 
-                                            ymax = simulated_hospitalizations.upper)) +
+    p <- list()
+    for(i in sort(unique(x$age_group))){
+      y <- filter(x, age_group == i)
+      p[[i]] <- ggplot(y, mapping = aes(x = date, y = expected_hospitalizations,
+                                     ymin = simulated_hospitalizations.lower, 
+                                     ymax = simulated_hospitalizations.upper)) +
+        geom_ribbon(alpha = 0.25) +
+        geom_line(color = cbPalette[6]) + 
+        geom_point(aes(y = hospitalizations), color = cbPalette[6], size = 2.5) +
+        scale_x_date("Date", date_breaks = "1 month", date_labels = "%m/%y") + 
+        scale_y_continuous("Hospitalizations") + 
+        coord_cartesian(ylim = c(0, max(y$simulated_hospitalizations.upper,
+                                        y$hospitalizations,
+                                        y$expected_hospitalizations)+1)) +
+        ggtitle(i) +
+        theme_bw(base_size = 20) +
+        theme(
+          plot.title = element_text(color = cbPalette[6]),
+          panel.grid.major = element_line(size = 0.7),
+          panel.grid.minor = element_blank(),
+          legend.position = "none"
+        )
+    }
+    
+    y <- x %>% 
+      group_by(date,municipality) %>%
+      summarize(expected_hospitalizations = sum(expected_hospitalizations),
+                simulated_hospitalizations.lower = sum(simulated_hospitalizations.lower), 
+                simulated_hospitalizations.upper = sum(simulated_hospitalizations.upper),
+                hospitalizations = sum(hospitalizations)) %>%
+      ungroup()
+   
+    p[[6]] <- ggplot(y, mapping = aes(x = date, y = expected_hospitalizations,
+                                      ymin = simulated_hospitalizations.lower, 
+                                      ymax = simulated_hospitalizations.upper)) +
       geom_ribbon(alpha = 0.25) +
       geom_line(color = cbPalette[6]) + 
       geom_point(aes(y = hospitalizations), color = cbPalette[6], size = 2.5) +
       scale_x_date("Date", date_breaks = "1 month", date_labels = "%m/%y") + 
       scale_y_continuous("Hospitalizations") + 
-      coord_cartesian(ylim = c(0, max(x$simulated_hospitalizations.upper,
-                                      x$hospitalizations,
-                                      x$expected_hospitalizations)+1)) +
+      coord_cartesian(ylim = c(0, max(y$simulated_hospitalizations.upper,
+                                      y$hospitalizations,
+                                      y$expected_hospitalizations)+1)) +
       ggtitle(x$municipality[1]) +
       theme_bw(base_size = 20) +
       theme(
@@ -31,104 +160,23 @@ df_posteriors_hosp %>%
         panel.grid.minor = element_blank(),
         legend.position = "none"
       )
-    ggsave( paste0( outdir_fig,"hosp_", x$municipality[1], ".png"),
-            plot = p, width = 6.5, height = 4.5, units = "in")
+    ggsave( paste0( outdir_fig,"Leeftijd/hosp_", x$municipality[1], ".png"),
+            plot = grid.arrange(p[[1]],p[[2]],p[[3]],p[[4]],p[[5]],p[[6]], nrow = 3),
+            width = 8, height = 7.5, units = "in")
     
-    write_csv(x, paste0( outdir_out, "hosp_",x$municipality[1], ".csv"))})
+    write_csv(x, paste0( outdir_out, "Leeftijd/hosp_",x$municipality[1], ".csv"))})
 
-stop("Tot hier")
 
-# Plaatje voor Michiel met counterfactual met "verouderde" vaccinitatie data
+#### Overig ####
 
-df_plot <- df_posteriors_hosp %>% 
-  group_by(municipality) %>%
-  group_split() %>%
-  lapply(function(x){
-    y <- x %>% filter(date == "2020-09-01") %>%
-      mutate(hosp_rate = expected_hospitalizations/(10^(load-19)*municipality_pop)) %>% 
-      select(municipality,hosp_rate,.draw)
-    x <- left_join(x,y, by = c("municipality",".draw")) %>%
-      mutate(expected_hospitalizations_novax = hosp_rate*10^(load-19)*municipality_pop,
-        simulated_hospitalizations_novax = rpois(nrow(.),expected_hospitalizations_novax))
-  }) %>%
-  bind_rows() %>%
-  group_by(date,municipality,hospitalizations,load) %>%
-  #slice_sample( n=100 ) %>%
-  median_qi(expected_hospitalizations,simulated_hospitalizations,
-            expected_hospitalizations_novax,simulated_hospitalizations_novax) %>%
-  mutate(date = as.Date(as.character(date))) 
 
-df_plot %>%
-  group_by(municipality) %>%
-  group_split()%>%
-  lapply(function(x){
-    p <- ggplot(x, mapping = aes(x = date, y = expected_hospitalizations,
-                                 ymin = simulated_hospitalizations.lower, 
-                                 ymax = simulated_hospitalizations.upper)) +
-      geom_ribbon(alpha = 0.25) +
-      geom_line(color = cbPalette[7]) + 
-      geom_point(aes(y = hospitalizations), color = cbPalette[7], size = 2.5) +
-      geom_line(aes( y = expected_hospitalizations_novax), color = cbPalette[6]) +
-      geom_ribbon(aes(ymin = simulated_hospitalizations_novax.lower, 
-                      ymax = simulated_hospitalizations_novax.upper), alpha = 0.25) +
-      scale_x_date("Date", date_breaks = "1 month", date_labels = "%m/%y") + 
-      scale_y_continuous("Hospitalizations") + #,
-      # sec.axis = sec_axis(trans =  ~.* conversion, 
-      #                     name = "Virusvracht")) + 
-      coord_cartesian(ylim = c(0, max(x$simulated_hospitalizations_novax.upper,
-                                      x$hospitalizations,
-                                      x$expected_hospitalizations_novax)+1)) +
-      ggtitle(x$municipality[1]) +
-      theme_bw(base_size = 20) +
-      theme(
-        plot.title = element_text(color = cbPalette[6]),
-        panel.grid.major = element_line(size = 0.7),
-        panel.grid.minor = element_blank(),
-        legend.position = "none",
-        axis.text.x = element_text(angle = 45, hjust = 1)
-      )
-    ggsave( paste0( outdir_fig,"3hosp_", x$municipality[1], ".png"),
-            plot = p, width = 6.5, height = 4.5, units = "in")})
 
-df_plot %>% ungroup %>%
-  filter(municipality %in% (df_plot %>% ungroup() %>%
-                              select(municipality,hospitalizations) %>% 
-                              group_by(municipality) %>% 
-                              summarize(hospitalizations = max(hospitalizations)) %>%
-                              arrange(desc(hospitalizations)) %>%
-                              .$municipality %>%
-                              .[1:4])) %>%
-  group_by(municipality) %>%
-  group_split() %>%
-  lapply(function(x){
-    ggplot(x, mapping = aes(x = date, y = expected_hospitalizations,
-                                 ymin = simulated_hospitalizations.lower, 
-                                 ymax = simulated_hospitalizations.upper)) +
-      geom_ribbon(alpha = 0.25) +
-      geom_line(color = cbPalette[7]) + 
-      geom_point(aes(y = hospitalizations), color = cbPalette[7], size = 2.5) +
-      geom_line(aes( y = expected_hospitalizations_novax), color = cbPalette[6]) +
-      geom_ribbon(aes(ymin = simulated_hospitalizations_novax.lower, 
-                      ymax = simulated_hospitalizations_novax.upper), alpha = 0.25) +
-      scale_x_date("Date", date_breaks = "1 month", date_labels = "%m/%y") + 
-      scale_y_continuous("Hospitalizations") + #,
-      # sec.axis = sec_axis(trans =  ~.* conversion, 
-      #                     name = "Virusvracht")) + 
-      coord_cartesian(ylim = c(0, max(x$simulated_hospitalizations_novax.upper,
-                                      x$hospitalizations,
-                                      x$expected_hospitalizations_novax)+1)) +
-      ggtitle(x$municipality[1]) +
-      theme_bw(base_size = 20) +
-      theme(
-        plot.title = element_text(color = cbPalette[6]),
-        panel.grid.major = element_line(size = 0.7),
-        panel.grid.minor = element_blank(),
-        legend.position = "none",
-        axis.text.x = element_text(angle = 45, hjust = 1)
-      )}) %>%
-  cowplot::plot_grid(plotlist = .,nrow = 2) %>%
-  ggsave(file = "4_municipality.jpg",width = 12, height = 7.3)
-  
+
+
+
+
+
+
 
 
 

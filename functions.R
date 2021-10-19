@@ -6,8 +6,12 @@ if( !dir.exists(outdir_out)) dir.create(outdir_out)
 outdir_res = "./results/"
 if( !dir.exists(outdir_res)) dir.create(outdir_res)
 
-calc_df_muni <-function(df_posteriors,startday,lastday){
-  df_posteriors %>% 
+calc_df_muni <-function(df_posteriors,startday,lastday,age = 5){
+  # We create the data frame with waste water data and the viral load.
+  # The optional input age can either be a single multiple of 5 which will 
+  # determine equally sized age groups, or a vector with explicit age groups
+  # of the form "5n - 5m-1".
+  df_muni <- df_posteriors %>% 
     filter( as.Date(date) >= startday, as.Date(date) <= lastday ) %>%
     group_by( municipality,date ) %>% 
     sample_draws(10) %>%
@@ -21,7 +25,8 @@ calc_df_muni <-function(df_posteriors,startday,lastday){
     group_by( date, municipality ) %>% 
     # Use parallel computing for speed
     group_split() %>%
-    future_map(function(df){summarize(df, load = median(load), # Median_qi can also be used
+    future_map(function(df){summarize(df, load_sd = sd(load), 
+                                      load = mean(load),# Median_qi can also be used
                                       # Then we first have to group df, and then apply 
                                       # median_qi. Does make the code a bit slower.
                                       date = first(date),
@@ -29,10 +34,37 @@ calc_df_muni <-function(df_posteriors,startday,lastday){
     bind_rows() %>%
     # Add the vaccinations, age, and hospitalizations
     left_join(df_vaccins, by = c("municipality","date")) %>%
-    mutate( age = str_extract(age_group,"^[0-9]+"),
-            age = as.numeric(age) + 2.5,
-            date = as.factor(date),
-            age_group = as.factor(age_group))
+    # Extract the lowest age from each age group so that we can reshape the groups
+    mutate(age_group = str_extract(age_group,"^[0-9]+") %>% as.numeric())
+    
+    # Make the new age groups so that we can later group them together
+    # Both approaches probably have better ways to achieve their goal
+    if(is.numeric(age)){
+      df_muni <- df_muni %>%
+        mutate(age_group = paste0(floor(age_group/age)*age," - ",
+                                  age*floor(age_group/age)+age-1)) 
+    } else {
+      for(i in seq_len(length(age))){
+        age_low = str_extract(age[i],"^[0-9]+") %>% as.numeric()
+        age_high = str_extract(age[i],"[0-9]+$") %>% as.numeric()
+        df_muni <- df_muni %>%
+          mutate(age_group = if_else(between(age_group,age_low,age_high),-i*1.,age_group))
+      }
+      df_muni <- df_muni %>% mutate(age_group = age[-age_group])
+    }
+    
+  df_muni <- df_muni %>%
+    group_by(date,municipality,age_group) %>%
+    summarize(load = first(load),
+              load_sd = first(load_sd),
+              percentage_vax = sum(percentage_vax*population)/sum(population),
+              hospitalizations = sum(hospitalizations), 
+              population = sum(population)) %>%
+    ungroup() %>%
+    mutate(age_group = as.factor(age_group),
+           date = as.factor(date))
+    
+    return(df_muni)
 }
 
 calc_vax <- function(df_vaccins,df_ziekenhuisopnames,startday,lastday){
@@ -115,23 +147,13 @@ initials = function() {
 # initialize variables
 initials_hosp = function() {
   return(list(
-    mean_hosp_rate = 3.0,
-    sigma_hosprate = 2,
-    hosp_rate = rep(2.5, length( unique( df_muni$municipality ))),
-    hosp_rate_age = c(.5,.5),
-    prevention_vax = rep(.8, length( unique( df_muni$age_group)))
+    # mean_hosp_rate = 3.0,
+    # sigma_hosprate = 2,
+    #hosp_rate = rep(2.5, length( unique( df_muni$municipality ))),
+    hosp_rate_age = rep(1,length(levels(df_muni$age_group))),
+    prevention_vax = rep(.8, length( levels( df_muni$age_group)))
   ))
 }
-# 
-# df_muni <- df_posteriors %>% 
-#   select( .draw, date, load, rwzi, municipality, hospitalizations ) %>%
-#   left_join(df_fractions ) %>% 
-#   mutate( load_muni = frac_municipality2RWZI * load ) %>% 
-#   group_by( date, municipality, hospitalizations, .draw ) %>%
-#   summarize( load = sum( load_muni ), .groups="drop_last") %>% 
-#   median_qi( load ) %>%
-#   mutate( date=as.Date(as.character(date))) 
-
 
 # colorblind-friendly scheme
 cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7") 
