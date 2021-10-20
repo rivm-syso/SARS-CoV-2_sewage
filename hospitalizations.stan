@@ -81,6 +81,9 @@ model {
   vector[n] hosp_rate_vector;
   vector[n] prevention_vax_vector;
 
+  /* Prior on the effectiveness of vaccination */
+  prevention_vax ~ beta(27,3);
+
   for(i in 1:n){
     hosp_rate_vector[i] = hosp_rate[age_group[i],municipality[i]];
     prevention_vax_vector[i] = prevention_vax[age_group[i]];

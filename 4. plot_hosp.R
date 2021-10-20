@@ -1,25 +1,57 @@
 library(gridExtra)
 
+load(paste0(outdir_res, "2021-10-21df_posteriors.RData"))
+
 # We once use median_qi to prepare the fit for plotting to save time.
-df_plot_hosp <- df_posteriors_hosp %>%
-  bind_rows(group_by(.,date,municipality,.chain,.iteration,.draw) %>%
-              summarize(age_group = "Totaal",
-                        across(contains("hospitalizations"),sum),
-                        .groups = "drop")) %>%
-  # group_by(date,municipality) %>%
-  # group_split() %>%
-  # lapply(function(df){
-  #   bind_rows(df, group_by(df,.chain,.iteration,.draw) %>%
-  #               summarize(age_group = "Totaal",
-  #                         across(contains("hospitalizations"),sum),
-  #                         .groups = "drop"))
-  # }) %>%
-  # bind_rows() %>%
-  group_by(date,municipality,hospitalizations,age_group) %>%
-  #slice_sample( n=100 ) %>%
-  median_qi(expected_hospitalizations,simulated_hospitalizations,
-            expected_hospitalizations_cf,simulated_hospitalizations_cf) %>%
-  mutate(date = as.Date(as.character(date))) %>%
+# df_plot_hosp <- df_posteriors_hosp %>%
+#   bind_rows(group_by(.,date,municipality,.chain,.iteration,.draw) %>%
+#               summarize(age_group = "Totaal",
+#                         across(contains("hospitalizations"),sum),
+#                         .groups = "drop")) %>%
+#   # group_by(date,municipality) %>%
+#   # group_split() %>%
+#   # lapply(function(df){
+#   #   bind_rows(df, group_by(df,.chain,.iteration,.draw) %>%
+#   #               summarize(age_group = "Totaal",
+#   #                         across(contains("hospitalizations"),sum),
+#   #                         .groups = "drop"))
+#   # }) %>%
+#   # bind_rows() %>%
+#   group_by(date,municipality,hospitalizations,age_group) %>%
+#   #slice_sample( n=100 ) %>%
+#   median_qi(expected_hospitalizations,simulated_hospitalizations,
+#             expected_hospitalizations_cf,simulated_hospitalizations_cf) %>%
+#   mutate(date = as.Date(as.character(date))) %>%
+#   group_by(municipality) %>%
+#   group_split()
+
+
+df_plot_hosp <- df_muni %>% 
+  group_by(municipality) %>% 
+  group_split() %>%
+  future_map(function(x){
+    left_join(x,df_posteriors_hosp, by = c("municipality", "age_group")) %>%
+      group_by(age_group) %>%
+      group_split() %>%
+      lapply(function(df){
+        arrange(df,date) %>%
+          mutate(percentage_vax = lag(percentage_vax, n = 14, default = 0),
+                 expected_hospitalizations_cf = hosp_rate * 10^(load-19) * population,
+                 expected_hospitalizations = expected_hospitalizations_cf *
+                   (1 - prevention_vax*percentage_vax),
+                 simulated_hospitalizations = rpois(nrow(.),expected_hospitalizations),
+                 simulated_hospitalizations_cf = rpois(nrow(.),expected_hospitalizations_cf))}) %>%
+      bind_rows() %>%
+      bind_rows(group_by(.,date,municipality,.chain,.iteration,.draw) %>%
+                  summarize(age_group = "Totaal",
+                            across(contains("hospitalizations"),sum),
+                            .groups = "drop")) %>%
+      group_by(date,municipality,hospitalizations,age_group) %>%
+      median_qi(expected_hospitalizations,simulated_hospitalizations,
+                expected_hospitalizations_cf,simulated_hospitalizations_cf) %>%
+      mutate(date = as.Date(as.character(date)))
+  },.options = furrr_options(seed = T)) %>%
+  bind_rows() %>%
   group_by(municipality) %>%
   group_split()
 

@@ -17,10 +17,10 @@ setwd( here() )
 # based on frequency of sampling and start of vaccination
 # here we take September 2020 up to and including February 2021
 startday <- as.Date("2020-09-01")
-lastday <- as.Date("2021-08-15")     # 2021-04-12
+lastday <- as.Date("2021-10-17")     # 2021-04-12
 
 #load( "./output/fit_pspline_2021-07-22.rda" )
-load( "./output/posteriors_2021-08-25.rda")
+load( "./output/posteriors_2021-10-20.rda")
 load("df_viralload_human_regions.RData")
 
 df_fractions <- df_viralload_human_regions %>% 
@@ -31,7 +31,7 @@ source( "functions.R")
 
 # Calculate the percentage of vaccinated individuals per municipality
 df_vaccins <- calc_vax(read.csv("Vaccinatiegraad.csv"),
-                       read.delim("Ziekenhuisopnames.txt", sep = " "),
+                       read.csv("Ziekenhuisopnames.csv"),
                        startday,lastday)
 # Calculate median load per municipality from posterior
 #  also sums up the population in municipalities
@@ -54,7 +54,7 @@ fit_hospitalization = stan(
     df_muni),
   init = initials_hosp,
   chains = 4,
-  iter = 100,
+  iter = 200,
   refresh = 10,
   control = list(adapt_delta = .95, max_treedepth = 12)
 )
@@ -66,21 +66,22 @@ print(traceplot(fit_hospitalization,"prevention_vax"))
 df_posteriors_hosp <- fit_hospitalization %>%
   recover_types(df_muni) %>%
   spread_draws(hosp_rate[age_group,municipality],
-               prevention_vax[age_group]) %>%
-  right_join(df_muni) %>%
-  # construct the expected and simulated hospitalizations
-  group_by(municipality,age_group) %>%
-  group_split() %>%
-  lapply(function(df){
-    arrange(df,date) %>%
-      mutate(percentage_vax = lag(percentage_vax, n = 14, default = 0),
-             expected_hospitalizations_cf = hosp_rate * 10^(load-19) * population,
-             expected_hospitalizations = expected_hospitalizations_cf *
-                                            (1 - prevention_vax*percentage_vax),
-             simulated_hospitalizations = rpois(nrow(df),expected_hospitalizations),
-             simulated_hospitalizations_cf = rpois(nrow(df),expected_hospitalizations_cf))
-  }) %>%
-  bind_rows() 
+               prevention_vax[age_group]) #%>%
+  # slice_sample(n = 100) %>%
+  # right_join(df_muni) %>%
+  # # construct the expected and simulated hospitalizations
+  # group_by(municipality,age_group) %>%
+  # group_split() %>%
+  # lapply(function(df){
+  #   arrange(df,date) %>%
+  #     mutate(percentage_vax = lag(percentage_vax, n = 14, default = 0),
+  #            expected_hospitalizations_cf = hosp_rate * 10^(load-19) * population,
+  #            expected_hospitalizations = expected_hospitalizations_cf *
+  #                                           (1 - prevention_vax*percentage_vax),
+  #            simulated_hospitalizations = rpois(nrow(df),expected_hospitalizations),
+  #            simulated_hospitalizations_cf = rpois(nrow(df),expected_hospitalizations_cf))
+  # }) %>%
+  # bind_rows() 
 
 save(df_posteriors_hosp, df_muni,
      file = paste0(outdir_res,Sys.Date(), "df_posteriors.RData"))
