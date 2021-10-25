@@ -3,8 +3,15 @@ library( tidybayes )
 library( patchwork )
 
 source( "functions.R")
+source( "settings.R")
 
-load(file = str_c( outdir_out, "posteriors_2021-09-21.rda"))
+load( viralload_filename )
+lastday <- min( lastday, max(df_viralload_human_regions$Datum))
+startday <- max( startday, min(df_viralload_human_regions$Datum))
+rm( df_viralload_human_regions )
+
+#Assuming file was created today
+load( here( outdir_out, "model_data", str_c("posteriors_", Sys.Date(), ".rda")))
 
 ###
 # Plot prob of detection
@@ -55,7 +62,7 @@ df_posteriors %>%
     panel.grid.minor = element_blank(),
     legend.position = "none"
   )
-ggsave( str_c( outdir_fig, "1posterior.png" ), width = 6.5, height = 4.5, units = "in")
+ggsave( here( outdir_fig, "Netherlands", "posterior.png" ), width = 6.5, height = 4.5, units = "in")
 
 ###
 # Plot each RWZI, write CSV
@@ -84,10 +91,10 @@ df_posteriors %>%
         panel.grid.major = element_line(size = 0.7),
         panel.grid.minor = element_blank(),
         legend.position = "none" )
-    ggsave( str_c( outdir_fig, y[1,1], ".png"),
+    ggsave( here( outdir_fig, "RWZI", str_c( y[1,1], ".png")),
             plot = p, width = 6.5, height = 4.5, units = "in")
     
-    write_csv(x, str_c( outdir_out, y[1,1], ".csv"))})
+    write_csv(x, here( outdir_out, "RWZI", str_c( y[1,1], ".csv")))})
 
 ##
 # make figure for manuscript
@@ -120,7 +127,7 @@ df_posteriors %>%
         legend.position = "none" )}) %>% 
   reduce( `+` ) + # Patchwork composer of plots
   plot_layout(ncol = 3)
-ggsave(  str_c( outdir_fig, "figure2_9plants.png"),width = 16, height = 11, units = "in")
+ggsave(  here( outdir_fig, "manuscript", "figure2_9plants.png"),width = 16, height = 11, units = "in")
 
 
 ###
@@ -139,15 +146,19 @@ df_posteriors %>%
 ###
 # Municipality level
 ###
-df_muni <- calc_df_muni( df_posteriors )
 
-df_muni %>% 
+df_vaccins <- calc_vax(startday,lastday)
+df_muni <- calc_df_muni( df_posteriors, df_vaccins, startday, lastday )
+
+df_muni %>%
+  mutate( date=as.Date(date)) %>% #TODO dates as dates!
   group_by( municipality ) %>% 
   group_walk( function(x,y){
-    max_h <- max(x$hospitalizations)
+    max_h <- max(x$hospitalizations, na.rm=TRUE )
     p<- ggplot(x, mapping = aes(x = date)) +
       geom_line(aes(y = load), color = cbPalette[7]) +
-      geom_ribbon(aes(ymin = .lower, ymax = .upper ), alpha = 0.25) +
+      # TODO: put confidence bounds back in.
+      #geom_ribbon(aes(ymin = .lower, ymax = .upper ), alpha = 0.25) +
       geom_point( aes(x = date, y = 10 + (hospitalizations*5)/max_h), color = cbPalette[7]) +
       ggtitle(y[1,1]) +
       scale_y_continuous(name = "Log(load)", sec.axis = sec_axis(~(-2*max_h +(.* max_h/5)), name = "Hospitalizations")) +
@@ -159,9 +170,9 @@ df_muni %>%
         panel.grid.major = element_line(size = 0.7),
         panel.grid.minor = element_blank(),
         legend.position = "none")
-    ggsave( str_c(outdir_fig, "/3", y[1,1], ".png" ),
+    ggsave( here(outdir_fig, "municipality", str_c(y[1,1], ".png" )),
             plot = p, width = 6.5, height = 4.5, units = "in" )
-    write_csv(x, str_c( outdir_out, y[1,1], ".csv")) } )
+    write_csv(x, here( outdir_out, "municipality", str_c( y[1,1], ".csv"))) } )
 
 ###
 # Compare 0,7,14 days before last date, by municipality
@@ -186,6 +197,7 @@ df_posteriors %>%
 ### 
 
 df_muni %>% 
+  mutate( date=as.Date(date) ) %>% 
   filter( municipality %in% c("Amsterdam","Rotterdam","s-Gravenhage",
                               "Utrecht","Eindhoven","Groningen","Tilburg","Almere","Breda" )) %>% 
   group_by( municipality ) %>% 
@@ -193,7 +205,7 @@ df_muni %>%
     max_h <- max(x$hospitalizations)
     p<- ggplot(x, mapping = aes(x = date)) +
       geom_line(aes(y = load), color = cbPalette[7]) +
-      geom_ribbon(aes(ymin = .lower, ymax = .upper ), alpha = 0.25) +
+      #geom_ribbon(aes(ymin = .lower, ymax = .upper ), alpha = 0.25) +
       geom_point( aes(x = date, y = 10 + (hospitalizations*5)/max_h), color = cbPalette[7]) +
       ggtitle(y[1,1]) +
       scale_y_continuous(name = "Log(load)", sec.axis = sec_axis(~(-2*max_h +(.* max_h/5)), name = "Hospitalizations")) +
@@ -207,7 +219,7 @@ df_muni %>%
         legend.position = "none") }) %>% 
   reduce( `+` ) +
   plot_layout( ncol=3)
-ggsave(str_c( outdir_fig, "figure3_9municipalities.png" ),width = 16, height = 11,units = "in")
+ggsave(here( outdir_fig, "manuscript",  "figure3_9municipalities.png" ),width = 16, height = 11,units = "in")
 
 ###
 # Plots by safety region
@@ -236,5 +248,6 @@ df_posteriors %>%
         panel.grid.minor = element_blank(),
         legend.position = "none"
       )
-    ggsave( str_c( outdir_fig, "/2", y[1,1], ".png" ),plot = p, width = 6.5, height = 4.5, units = "in" )
-    write_csv(x, str_c(outdir_out, y[1,1],".csv"))})
+    ggsave( here( outdir_fig, "safetyregion", str_c(y[1,1], ".png" )),
+            plot = p, width = 6.5, height = 4.5, units = "in" )
+    write_csv(x, here(outdir_out, "safetyregion", str_c(y[1,1],".csv")))})
