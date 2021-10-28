@@ -85,8 +85,8 @@ df_plot_hosp %>% future_map(function(x){
     }
     
     ggsave( paste0( outdir_fig,"Leeftijd/hosp_", x$municipality[1], ".png"),
-            plot = grid.arrange(p[[1]],p[[2]],p[[3]],p[[4]],p[[5]],p[[6]], nrow = 3),
-            width = 18, height = 10, units = "in")
+            plot = grid.arrange(grobs = p, ncol = 2),
+            width = 18, height = 4*ceiling(length(p)/2), units = "in")
     
     write_csv(x, paste0( outdir_out, "Leeftijd/hosp_",x$municipality[1], ".csv"))
 })
@@ -122,8 +122,8 @@ df_plot_hosp %>% future_map(function(x){
   }
   
   ggsave( paste0( outdir_fig,"Leeftijd/cf_hosp_", x$municipality[1], ".png"),
-          plot = grid.arrange(p[[1]],p[[2]],p[[3]],p[[4]],p[[5]],p[[6]], nrow = 3),
-          width = 18, height = 10, units = "in")
+          plot = grid.arrange(grobs = p, ncol = 2),
+          width = 18, height = 4*ceiling(length(p)/2), units = "in")
   
   write_csv(x, paste0( outdir_out, "Leeftijd/cf_hosp_",x$municipality[1], ".csv"))
 })
