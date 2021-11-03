@@ -1,6 +1,8 @@
 library( tidyverse )
 library( tidybayes )
 library( patchwork )
+library( here )
+library( furrr )
 
 source( "functions.R")
 source( "settings.R")
@@ -10,15 +12,15 @@ lastday <- min( lastday, max(df_viralload_human_regions$Datum))
 startday <- max( startday, min(df_viralload_human_regions$Datum))
 rm( df_viralload_human_regions )
 
-#Assuming file was created today
-load( here( outdir_out, "model_data", str_c("posteriors_", Sys.Date(), ".rda")))
+load( here( outdir_out, "model_data", str_c("posteriors_2021-10-28.rda")))
 
 ###
 # Plot prob of detection
 ###
 df_posteriors %>%
+  ungroup() %>% 
   group_by(rwzi) %>%
-  slice_sample( n=100 ) %>%
+  slice_sample( n=10 ) %>% 
   ungroup() %>% 
   mutate( sample=1:n() ) %>% 
   expand_grid( conc=seq(11, 13, by = 0.1) ) %>%
@@ -43,7 +45,7 @@ ggsave(str_c( outdir_fig,  "prob_detection.png"), width = 6.5, height = 4.5, uni
 ###
 df_posteriors %>%
   group_by( date, .draw ) %>% 
-  summarize( weighted_concentration = sum(load * rwzi_persons) / sum( rwzi_persons ) ) %>% 
+  summarize( weighted_concentration = weighted.mean(load,rwzi_persons ), .groups="drop" ) %>% 
   group_by( date ) %>% 
   median_qi( weighted_concentration ) %>% 
   mutate( date = as.Date( as.character( date )) ) %>% 
@@ -179,7 +181,7 @@ df_muni %>%
 ###
 df_posteriors %>% 
   select( .draw, date, load, rwzi, municipality, hospitalizations ) %>%
-  left_join( df_fractions ) %>% 
+  left_join( df_fractions, by = c("rwzi", "municipality") ) %>% 
   mutate( date = as.Date( as.character( date))) %>% 
   filter( date %in% (max(date) - c(0, 7, 14)  ) ) %>% 
   mutate( load_muni = frac_RWZI2municipality * 10^load ) %>% 

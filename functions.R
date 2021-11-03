@@ -47,15 +47,14 @@ calc_vax <- function( startday,lastday){
   # independent of the day, hence we make a help-tibble with the populations
   df_vaccins_pop <- df_vaccins %>%
     group_by(municipality,age_group) %>%
-    summarize(population = first(population)) %>%
-    ungroup()
+    summarize(population = first(population), .groups="drop")
   
   # Once we matched the population, we no longer need the population data 
   # in the vaccination data
   df_vaccins <- df_vaccins %>%
     select(-population)
   
-  df_ziekenhuisopnames <- read.delim(hosp_filename, sep = " ") %>%
+  df_ziekenhuisopnames <- read.csv(hosp_filename) %>%
     filter(between(as.Date(Date_of_statistics),startday,lastday)) %>%
     select("date" = "Date_of_statistics",
            "municipality" = "Gemeente",

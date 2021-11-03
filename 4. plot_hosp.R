@@ -1,81 +1,21 @@
-<<<<<<< HEAD
-color = cbPalette[6]
-pow = 0.0
-for (municipality in 1 : numberofmunicipalities) { 
-  conc_med <- array(NA, numberofdays)
-  conc_ub <- array(NA, numberofdays)
-  conc_lb <- array(NA, numberofdays)
-  cases <- array(NA, numberofdays)
-  for (j in 1:numberofdays) {
-    conc_med[j] <-params_hospitalization$expected_hospitalizations[, j, municipality]
-    # conc_med[j] <-median(params_hospitalization$simulated_hospitalizations[, j, municipality])
-    conc_lb[j] <-
-      quantile(params_hospitalization$simulated_hospitalizations[, j, municipality], probs = 0.025)
-    conc_ub[j] <-
-      quantile(params_hospitalization$simulated_hospitalizations[, j, municipality], probs = 0.975)
-    cases[j] <- hospitaldata_matrix[municipality, j]
-  }
-  df_conc <- data.frame(
-    list(
-      date = as.Date(1:numberofdays, origin = "2020-09-01"), #startday
-      median_conc = conc_med,
-      lower_conc = conc_lb,
-      upper_conc = conc_ub
-    )
-  )
-  df_hosp <- data.frame(
-    list(
-      date = as.Date(1:numberofdays, origin = "2020-09-01"),
-      cases = cases
-    )
-  )
-  write_csv(df_conc, paste0(
-    outdir_out,"/4",
-    colnames(df_RWZItoMUN)[[1+municipality]],
-    ".csv"))
-  max_y <- max(df_hosp$cases)
-  plot_concentration <- 
-    ggplot(
-      data = df_conc,
-      mapping = aes(x = date)) +
-    geom_line(aes(y = median_conc), color = color) +
-    geom_ribbon(aes(ymin = lower_conc, ymax = upper_conc), alpha = 0.25) +
-    geom_point(data = df_hosp, aes(x = date, y = cases, color = color)) +
-    labs(x = "Date" , y = "Hospitalizations") +
-    ggtitle(colnames(df_RWZItoMUN)[[1+municipality]]) +
-    scale_y_continuous(name = "Hospitalizations") +
-    coord_cartesian(ylim = c(0, max_y+1)) +
-    scale_x_date(date_breaks = "1 month", date_labels = "%m/%y") + #"%b"
-    theme_bw(base_size = 20) +
-    theme(
-      plot.title = element_text(color = color),
-      panel.grid.major = element_line(size = 0.7),
-      panel.grid.minor = element_blank(),
-      legend.position = "none"
-    )
-  plot_concentration
-  ggsave(
-    paste0(
-      outdir_fig, "/4",
-      colnames(df_RWZItoMUN)[[1+municipality]],
-      ".png"
-    ),
-    plot = plot_concentration, 
-    width = 6.5, 
-    height = 4.5, 
-    units = "in"
-  )
-}
-=======
+library( tidyverse )
+library( tidybayes )
+library( patchwork )
+library( here )
+library( furrr )
+
+source( "functions.R")
+source( "settings.R")
+
+load( here( outdir_out, "model_data", str_c( "posteriors_hosp_age", Sys.Date(), ".rda")))
+
 
 df_posteriors_hosp %>%
   group_by(date,municipality,hospitalizations,load) %>%
-  #slice_sample( n=100 ) %>%
   median_qi(expected_hospitalizations,simulated_hospitalizations) %>%
   mutate(date = as.Date(as.character(date))) %>%
   group_by(municipality) %>%
-  group_split()%>%
-  lapply(function(x){
+  group_walk( function( x,y ){
     p <- ggplot(x, mapping = aes(x = date, y = expected_hospitalizations,
                                             ymin = simulated_hospitalizations.lower, 
                                             ymax = simulated_hospitalizations.upper)) +
@@ -87,7 +27,7 @@ df_posteriors_hosp %>%
       coord_cartesian(ylim = c(0, max(x$simulated_hospitalizations.upper,
                                       x$hospitalizations,
                                       x$expected_hospitalizations)+1)) +
-      ggtitle(x$municipality[1]) +
+      ggtitle(y[[1]]) +
       theme_bw(base_size = 20) +
       theme(
         plot.title = element_text(color = cbPalette[6]),
@@ -95,10 +35,10 @@ df_posteriors_hosp %>%
         panel.grid.minor = element_blank(),
         legend.position = "none"
       )
-    ggsave( paste0( outdir_fig,"hosp_", x$municipality[1], ".png"),
+    ggsave( here(outdir_fig, "municipality_hosp", str_c(y[[1]], ".png")),
             plot = p, width = 6.5, height = 4.5, units = "in")
     
-    write_csv(x, paste0( outdir_out, "hosp_",x$municipality[1], ".csv"))})
+    write_csv(x, here( outdir_out, "municipality_hosp", str_c(y[[1]], ".csv")))})
 
 stop("Tot hier")
 
