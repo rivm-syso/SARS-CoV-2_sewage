@@ -53,19 +53,44 @@ fit_hospitalization = stan(
   "hospitalizations.stan",
   model_name = "wastewater_model",
   data = compose_data(
-          max_delay = 0,
-          ref_load = 19,
-          delay_vax = 14,
-          df_muni),
+    max_delay = 0,
+    ref_load = 19,
+    delay_vax = 14,
+    df_muni),
   init = initials_hosp,
   chains = 4,
-  iter = 100,
+  iter = 200,
   refresh = 10,
-  control = list(adapt_delta = 0.7, max_treedepth = 12)
+  control = list(adapt_delta = .95, max_treedepth = 12)
 )
 
-# some output and checks
-traceplot(fit_hospitalization, pars = c("prevention_vax","hosp_rate[16]", "hosp_rate[249]", "hosp_rate[252]", "hosp_rate[292]"))
+print(traceplot(fit_hospitalization,"mean_hosp_rate"))
+print(traceplot(fit_hospitalization,"sigma_hosp_rate"))
+print(traceplot(fit_hospitalization,"prevention_vax"))
+
+df_posteriors_hosp <- fit_hospitalization %>%
+  recover_types(df_muni) %>%
+  spread_draws(hosp_rate[age_group,municipality],
+               prevention_vax[age_group]) #%>%
+  # slice_sample(n = 100) %>%
+  # right_join(df_muni) %>%
+  # # construct the expected and simulated hospitalizations
+  # group_by(municipality,age_group) %>%
+  # group_split() %>%
+  # lapply(function(df){
+  #   arrange(df,date) %>%
+  #     mutate(percentage_vax = lag(percentage_vax, n = 14, default = 0),
+  #            expected_hospitalizations_cf = hosp_rate * 10^(load-19) * population,
+  #            expected_hospitalizations = expected_hospitalizations_cf *
+  #                                           (1 - prevention_vax*percentage_vax),
+  #            simulated_hospitalizations = rpois(nrow(df),expected_hospitalizations),
+  #            simulated_hospitalizations_cf = rpois(nrow(df),expected_hospitalizations_cf))
+  # }) %>%
+  # bind_rows() 
+
+save(df_posteriors_hosp, df_muni,
+     file = paste0(outdir_res,Sys.Date(), "df_posteriors.RData"))
+save(fit_hospitalization, file = str_c( outdir_res, "fit_hosp", Sys.Date(), ".rda"))
 
 df_posteriors_hosp <- fit_hospitalization %>% 
   recover_types( df_muni ) %>% 

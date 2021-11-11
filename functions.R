@@ -14,7 +14,8 @@ calc_df_muni <-function(df_posteriors,df_vaccins,startday,lastday){
     group_by( date, municipality ) %>% 
     # Use parallel computing for speed
     group_split() %>%
-    future_map(function(df){summarize(df, load = median(load), # Median_qi can also be used
+    future_map(function(df){summarize(df, load_sd = sd(load), 
+                                      load = mean(load),# Median_qi can also be used
                                       # Then we first have to group df, and then apply 
                                       # median_qi. Does make the code a bit slower.
                                       date = first(date),
@@ -22,13 +23,37 @@ calc_df_muni <-function(df_posteriors,df_vaccins,startday,lastday){
     bind_rows() %>%
     # Add the vaccinations, age, and hospitalizations
     left_join(df_vaccins, by = c("municipality","date")) %>%
-    group_by(date,municipality) %>%
-    summarize(date= first(date),
-              load = first(load),
-              hospitalizations = sum(hospitalizations),
-              percentage_vax = sum(percentage_vax * population) / sum(population),
+    # Extract the lowest age from each age group so that we can reshape the groups
+    mutate(age_group = str_extract(age_group,"^[0-9]+") %>% as.numeric())
+    
+    # Make the new age groups so that we can later group them together
+    # Both approaches probably have better ways to achieve their goal
+    if(is.numeric(age)){
+      df_muni <- df_muni %>%
+        mutate(age_group = paste0(floor(age_group/age)*age," - ",
+                                  age*floor(age_group/age)+age-1)) 
+    } else {
+      for(i in seq_len(length(age))){
+        age_low = str_extract(age[i],"^[0-9]+") %>% as.numeric()
+        age_high = str_extract(age[i],"[0-9]+$") %>% as.numeric()
+        df_muni <- df_muni %>%
+          mutate(age_group = if_else(between(age_group,age_low,age_high),-i*1.,age_group))
+      }
+      df_muni <- df_muni %>% mutate(age_group = age[-age_group])
+    }
+    
+  df_muni <- df_muni %>%
+    group_by(date,municipality,age_group) %>%
+    summarize(load = first(load),
+              load_sd = first(load_sd),
+              percentage_vax = sum(percentage_vax*population)/sum(population),
+              hospitalizations = sum(hospitalizations), 
               population = sum(population)) %>%
-    ungroup()
+    ungroup() %>%
+    mutate(age_group = as.factor(age_group),
+           date = as.factor(date))
+    
+    return(df_muni)
 }
 
 calc_vax <- function( startday,lastday){
@@ -110,12 +135,11 @@ initials = function() {
 # initialize variables
 initials_hosp = function() {
   return(list(
-    mean_hosp_rate = 3.0,
-    sigma_hosprate = 2,
-    hosp_rate = rep(2.5, length( unique( df_muni$municipality ))),
-    prevention_vax = 0.8
-    # hosp_rate_age = rep(.5, length( unique( df_muni$age_group)) - 1),
-    # prevention_vax = rep(.8, length( unique( df_muni$age_group)))
+    # mean_hosp_rate = 3.0,
+    # sigma_hosprate = 2,
+    #hosp_rate = rep(2.5, length( unique( df_muni$municipality ))),
+    hosp_rate_age = rep(1,length(levels(df_muni$age_group))),
+    prevention_vax = rep(.8, length( levels( df_muni$age_group)))
   ))
 }
 
