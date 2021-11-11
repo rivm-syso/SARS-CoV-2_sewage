@@ -1,29 +1,13 @@
-library(gridExtra)
+library( tidyverse )
+library( tidybayes )
+library( patchwork )
+library( here )
+library( furrr )
 
-load(paste0(outdir_res, "2021-10-21df_posteriors.RData"))
+source( "functions.R")
+source( "settings.R")
 
-# We once use median_qi to prepare the fit for plotting to save time.
-# df_plot_hosp <- df_posteriors_hosp %>%
-#   bind_rows(group_by(.,date,municipality,.chain,.iteration,.draw) %>%
-#               summarize(age_group = "Totaal",
-#                         across(contains("hospitalizations"),sum),
-#                         .groups = "drop")) %>%
-#   # group_by(date,municipality) %>%
-#   # group_split() %>%
-#   # lapply(function(df){
-#   #   bind_rows(df, group_by(df,.chain,.iteration,.draw) %>%
-#   #               summarize(age_group = "Totaal",
-#   #                         across(contains("hospitalizations"),sum),
-#   #                         .groups = "drop"))
-#   # }) %>%
-#   # bind_rows() %>%
-#   group_by(date,municipality,hospitalizations,age_group) %>%
-#   #slice_sample( n=100 ) %>%
-#   median_qi(expected_hospitalizations,simulated_hospitalizations,
-#             expected_hospitalizations_cf,simulated_hospitalizations_cf) %>%
-#   mutate(date = as.Date(as.character(date))) %>%
-#   group_by(municipality) %>%
-#   group_split()
+load( here( outdir_out, "model_data", str_c( "posteriors_hosp_age", Sys.Date(), ".rda")))
 
 
 df_plot_hosp <- df_muni %>% 
@@ -100,6 +84,7 @@ df_plot_hosp %>% future_map(function(x){
     p[[i]] <- ggplot(y, mapping = aes(x = date, y = expected_hospitalizations,
                                       ymin = simulated_hospitalizations.lower, 
                                       ymax = simulated_hospitalizations.upper)) +
+
       geom_ribbon(alpha = 0.25) +
       geom_line(color = cbPalette[6]) + 
       geom_ribbon(alpha = 0.25, mapping = aes(ymin = simulated_hospitalizations_cf.lower,
@@ -108,10 +93,11 @@ df_plot_hosp %>% future_map(function(x){
       geom_point(aes(y = hospitalizations), color = cbPalette[6], size = 2.5) +
       scale_x_date("Date", date_breaks = "1 month", date_labels = "%m/%y") + 
       scale_y_continuous("Hospitalizations") + 
-      coord_cartesian(ylim = c(0, max(y$simulated_hospitalizations.upper,
-                                      y$hospitalizations,
-                                      y$expected_hospitalizations)+1)) +
-      ggtitle(i) +
+
+      coord_cartesian(ylim = c(0, max(x$simulated_hospitalizations.upper,
+                                      x$hospitalizations,
+                                      x$expected_hospitalizations)+1)) +
+      ggtitle(y[[1]]) +
       theme_bw(base_size = 20) +
       theme(
         plot.title = element_text(color = cbPalette[6]),
@@ -127,9 +113,6 @@ df_plot_hosp %>% future_map(function(x){
   
   write_csv(x, paste0( outdir_out, "Leeftijd/cf_hosp_",x$municipality[1], ".csv"))
 })
-
-stop("Tot hier")
-
 
 #### Leeftijdplaatjes ####
 
@@ -201,17 +184,6 @@ df_posteriors_hosp_no_vax_age %>%
 
 #### Overig ####
 
-
-
-
-
-
-
-
-
-
-
-
 df_posteriors_hosp %>% 
   group_by(municipality,date) %>% 
   summarize(hosp_per_million = first(hospitalizations)/first(municipality_pop)*10^6,
@@ -272,10 +244,6 @@ df_posteriors_hosp %>%
       )
     ggsave( paste0( outdir_fig,"1hosp_", x$municipality[1], ".png"),
             plot = p, width = 6.5, height = 4.5, units = "in")},C)
-
-
-
-
 
 
 # make figure for manuscript

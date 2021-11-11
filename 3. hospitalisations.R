@@ -1,45 +1,50 @@
 ### Poisson regression for hospital data
 
-library(tidyverse)
-library(here)
-library(rstan)
-rstan_options(auto_write = TRUE)
-options(mc.cores = parallel::detectCores())
+library( tidyverse )
+library( here )
+library( rstan )
 library( tidybayes )
 library( loo )
-library(furrr)
-
-plan(multisession, workers = 10)
+library( furrr )
 
 setwd( here() )
 
-# select subset of data for regression analysis
-# based on frequency of sampling and start of vaccination
-# here we take September 2020 up to and including February 2021
-startday <- as.Date("2020-09-01")
-lastday <- as.Date("2021-10-17")     # 2021-04-12
+source( "functions.R")
+source( "settings.R" )
 
-#load( "./output/fit_pspline_2021-07-22.rda" )
-load( "./output/posteriors_2021-10-20.rda")
-load("df_viralload_human_regions.RData")
+#options(buildtools.check = NULL)
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+
+plan(multisession, workers = 10)
+
+load( viralload_filename )
+lastday <- min( lastday, max(df_viralload_human_regions$Datum))
+startday <- max( startday, min(df_viralload_human_regions$Datum))
+
+# only when not exist
+load( here( outdir_out, "model_data", "fit_pspline_2021-10-28.rda" ) )
+load( here( outdir_out, "model_data", "posteriors_2021-10-28.rda" ) )
 
 df_fractions <- df_viralload_human_regions %>% 
-  select( municipality, rwzi=RWZI, starts_with( "frac" )) %>% 
+  select( municipality, rwzi=RWZI, municipality_pop=Inwoneraantal_municipality, starts_with( "frac" )) %>% 
   unique()
 
-source( "functions.R")
-
 # Calculate the percentage of vaccinated individuals per municipality
-df_vaccins <- calc_vax(read.csv("Vaccinatiegraad.csv"),
-                       read.csv("Ziekenhuisopnames.csv"),
-                       startday,lastday)
+df_vaccins <- calc_vax(startday,lastday)
+
 # Calculate median load per municipality from posterior
 #  also sums up the population in municipalities
-df_muni <- calc_df_muni(df_posteriors,startday,lastday,20)
+df_muni <- calc_df_muni(df_posteriors, df_vaccins, startday,lastday)
+
+# Sometimes the vaccin file is not up to date
+df_muni <- df_muni %>% filter( !is.na(population))
+  
+rm( df_posteriors )
 
 # Save df_muni en df_vaccins
-save(df_vaccins,file = paste0(outdir_res,Sys.Date(),"df_vaccins.RData"))
-save(df_muni,file = paste0(outdir_res,Sys.Date(), "df_muni.RData"))
+save(df_vaccins,file = here( outdir_out, "model_data", str_c("df_vaccins_age", Sys.Date(),".RData")))
+save(df_muni,file = here( outdir_out, "model_data", str_c("df_muni_age", Sys.Date(),".RData")))
 
 future:::ClusterRegistry("stop")
 
@@ -87,15 +92,26 @@ save(df_posteriors_hosp, df_muni,
      file = paste0(outdir_res,Sys.Date(), "df_posteriors.RData"))
 save(fit_hospitalization, file = str_c( outdir_res, "fit_hosp", Sys.Date(), ".rda"))
 
-
+df_posteriors_hosp <- fit_hospitalization %>% 
+  recover_types( df_muni ) %>% 
+  stan_split(10,c("expected_hospitalizations","simulated_hospitalizations"),
+             c("hosp_parameter","sum_load")) %>%
+  future_map(function(x){spread_draws(x,c(expected_hospitalizations,simulated_hospitalizations)[date,municipality])}) %>% 
+  bind_rows() %>%
+  left_join( df_muni, c("date", "municipality") )
 
 # model selection based on predictive performance 
 # out-of-sample prediction for time series a la Vehtari possible?
 # waic ok, loo_ic meh - sort this out!
-loo_output = loo(fit_hospitalization, cores = 10, is_method = "psis")
-loo_output
-LL <- extract_log_lik(fit_hospitalization, parameter_name='log_likes_hospital', merge_chains=F)
-waic(LL)
-r_eff <- relative_eff(exp(LL), cores = 10) # costly, take no more than 1000-2000 samples
-loo(LL, r_eff=r_eff)
-rm(r_eff)
+# loo_output = loo(fit_hospitalization, cores = 10, is_method = "psis")
+# loo_output
+# LL <- extract_log_lik(fit_hospitalization, parameter_name='log_likes_hospital', merge_chains=F)
+# waic(LL)
+# r_eff <- relative_eff(exp(LL), cores = 10) # costly, take no more than 1000-2000 samples
+# loo(LL, r_eff=r_eff)
+# rm(r_eff)
+
+# save, rmeove, and load fit
+save(fit_hospitalization, file = here(outdir_out, "model_data", str_c( "fit_hosp_age", Sys.Date(), ".rda")))
+save(df_posteriors_hosp, df_fractions, file = here(outdir_out, "model_data", str_c( "posteriors_hosp_age", Sys.Date(), ".rda")))
+

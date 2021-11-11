@@ -1,17 +1,6 @@
-# directories
-outdir_fig = "./figures/"
-if( !dir.exists(outdir_fig)) dir.create(outdir_fig)
-outdir_out = "./output/"
-if( !dir.exists(outdir_out)) dir.create(outdir_out)
-outdir_res = "./results/"
-if( !dir.exists(outdir_res)) dir.create(outdir_res)
 
-calc_df_muni <-function(df_posteriors,startday,lastday,age = 5){
-  # We create the data frame with waste water data and the viral load.
-  # The optional input age can either be a single multiple of 5 which will 
-  # determine equally sized age groups, or a vector with explicit age groups
-  # of the form "5n - 5m-1".
-  df_muni <- df_posteriors %>% 
+calc_df_muni <-function(df_posteriors,df_vaccins,startday,lastday){
+  df_posteriors %>% 
     filter( as.Date(date) >= startday, as.Date(date) <= lastday ) %>%
     group_by( municipality,date ) %>% 
     sample_draws(10) %>%
@@ -67,8 +56,8 @@ calc_df_muni <-function(df_posteriors,startday,lastday,age = 5){
     return(df_muni)
 }
 
-calc_vax <- function(df_vaccins,df_ziekenhuisopnames,startday,lastday){
-  df_vaccins <- df_vaccins %>%
+calc_vax <- function( startday,lastday){
+  df_vaccins <- read.csv(vaccin_filename) %>%
     filter(between(as.Date(Datum_1eprik),startday,lastday)) %>%
     select("date" = "Datum_1eprik",
            "municipality" = "Gemeente",
@@ -83,15 +72,14 @@ calc_vax <- function(df_vaccins,df_ziekenhuisopnames,startday,lastday){
   # independent of the day, hence we make a help-tibble with the populations
   df_vaccins_pop <- df_vaccins %>%
     group_by(municipality,age_group) %>%
-    summarize(population = first(population)) %>%
-    ungroup()
+    summarize(population = first(population), .groups="drop")
   
   # Once we matched the population, we no longer need the population data 
   # in the vaccination data
   df_vaccins <- df_vaccins %>%
     select(-population)
   
-  df_ziekenhuisopnames <- df_ziekenhuisopnames %>%
+  df_ziekenhuisopnames <- read.csv(hosp_filename) %>%
     filter(between(as.Date(Date_of_statistics),startday,lastday)) %>%
     select("date" = "Date_of_statistics",
            "municipality" = "Gemeente",
@@ -252,6 +240,3 @@ stan_split <- function(fit_hospitalization,num_groups,parameters,par_ignore){
   
   return(fit_hosp_list)
 }
-
-
-

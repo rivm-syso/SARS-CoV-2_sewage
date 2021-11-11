@@ -15,10 +15,6 @@
 /* update 6/3/2021: greatly simplified and cleanup: weighted past as predictor        */
 /* using truncated geometric distributions                                            */
 
-/* TODO: max_delay just throws away the first few days instead of modeling a shift 
- between hospitalizations and viral loads. */
-
-
 data {
   int<lower=1> n;
   int<lower = 1> n_municipality;  // number of regions (province, safety region, municipality)
@@ -60,7 +56,6 @@ transformed data {
       percentage_vax_delay[i] = percentage_vax_mat[date[i]-delay_vax,municipality[i],age_group[i]];
     }
   }
-  
 }
 
 parameters {
