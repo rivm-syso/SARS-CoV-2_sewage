@@ -1,7 +1,11 @@
 
-calc_df_muni <-function(df_posteriors,df_vaccins,startday,lastday){
-  df_posteriors %>% 
-    filter( as.Date(date) >= startday, as.Date(date) <= lastday ) %>%
+calc_df_muni <-function(df_posteriors, df_vaccins, startday,lastday,age = 5){
+  # We create the data frame with waste water data and the viral load.
+  # The optional input age can either be a single multiple of 5 which will 
+  # determine equally sized age groups, or a vector with explicit age groups
+  # of the form "5n - 5m-1".
+  df_muni <- df_posteriors %>% 
+    filter( between( date, startday, lastday ) ) %>%
     group_by( municipality,date ) %>% 
     sample_draws(10) %>%
     ungroup() %>% 
@@ -11,7 +15,6 @@ calc_df_muni <-function(df_posteriors,df_vaccins,startday,lastday){
     group_by( date, municipality, .draw ) %>%
     summarize( load = sum( load_muni ),
                .groups="drop_last") %>% 
-    group_by( date, municipality ) %>% 
     # Use parallel computing for speed
     group_split() %>%
     future_map(function(df){summarize(df, load_sd = sd(load), 
@@ -48,10 +51,9 @@ calc_df_muni <-function(df_posteriors,df_vaccins,startday,lastday){
               load_sd = first(load_sd),
               percentage_vax = sum(percentage_vax*population)/sum(population),
               hospitalizations = sum(hospitalizations), 
-              population = sum(population)) %>%
-    ungroup() %>%
-    mutate(age_group = as.factor(age_group),
-           date = as.factor(date))
+              population = sum(population),
+              .groups="drop") %>%
+    mutate(age_group = as.factor(age_group))
     
     return(df_muni)
 }
@@ -95,8 +97,9 @@ calc_vax <- function( startday,lastday){
            municipality = str_remove(municipality," \\(O\\.\\)"),   # Hengelo
            municipality = str_replace(municipality,",","."),        # Nuenen etc.
            municipality = str_replace(municipality,"â","a"),        # Fryslan
-           municipality = str_replace(municipality,"ú","u"))        # Sudwest Fryslan
-
+           municipality = str_replace(municipality,"ú","u")) %>%         # Sudwest Fryslan
+    mutate( date=as.Date(date))
+  
   return(df_ziekenhuisopnames)
 }
 

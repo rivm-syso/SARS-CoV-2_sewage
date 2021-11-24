@@ -18,28 +18,28 @@ options(mc.cores = parallel::detectCores())
 
 plan(multisession, workers = 10)
 
+#
+# Load files
+# 
 load( viralload_filename )
-lastday <- min( lastday, max(df_viralload_human_regions$Datum))
-startday <- max( startday, min(df_viralload_human_regions$Datum))
+# TODO: only when not exist
+load( here( outdir_out, "model_data", "fit_pspline_2021-11-16.rda" ) )
+load( here( outdir_out, "model_data", "posteriors_2021-11-16.rda" ) )
+df_vaccins <- calc_vax(startday,lastday) # Calculate the percentage of vaccinated individuals per municipality
 
-# only when not exist
-load( here( outdir_out, "model_data", "fit_pspline_2021-10-28.rda" ) )
-load( here( outdir_out, "model_data", "posteriors_2021-10-28.rda" ) )
+# Clip first and last day such that all data frames span the same time period
+lastday  <- min( lastday,  max(df_posteriors$date), max(df_vaccins$date), max(df_viralload_human_regions$Datum))
+startday <- max( startday, min(df_posteriors$date), min(df_vaccins$date), min(df_viralload_human_regions$Datum))
 
+# Fractions of municipalities and VR's in RWZI's
 df_fractions <- df_viralload_human_regions %>% 
   select( municipality, rwzi=RWZI, municipality_pop=Inwoneraantal_municipality, starts_with( "frac" )) %>% 
   unique()
 
-# Calculate the percentage of vaccinated individuals per municipality
-df_vaccins <- calc_vax(startday,lastday)
-
 # Calculate median load per municipality from posterior
 #  also sums up the population in municipalities
-df_muni <- calc_df_muni(df_posteriors, df_vaccins, startday,lastday)
+df_muni <- calc_df_muni(df_posteriors, df_vaccins, startday,lastday, 20 )
 
-# Sometimes the vaccin file is not up to date
-df_muni <- df_muni %>% filter( !is.na(population))
-  
 rm( df_posteriors )
 
 # Save df_muni en df_vaccins
@@ -47,6 +47,8 @@ save(df_vaccins,file = here( outdir_out, "model_data", str_c("df_vaccins_age", S
 save(df_muni,file = here( outdir_out, "model_data", str_c("df_muni_age", Sys.Date(),".RData")))
 
 future:::ClusterRegistry("stop")
+
+#df_muni <- mutate(df_muni , age_group = as.factor(as.character(age_group)))
 
 # run Stan model
 fit_hospitalization = stan(
@@ -56,7 +58,7 @@ fit_hospitalization = stan(
     max_delay = 0,
     ref_load = 19,
     delay_vax = 14,
-    df_muni),
+    df_muni %>% mutate( date=as.factor(date))),
   init = initials_hosp,
   chains = 4,
   iter = 200,
@@ -71,34 +73,7 @@ print(traceplot(fit_hospitalization,"prevention_vax"))
 df_posteriors_hosp <- fit_hospitalization %>%
   recover_types(df_muni) %>%
   spread_draws(hosp_rate[age_group,municipality],
-               prevention_vax[age_group]) #%>%
-  # slice_sample(n = 100) %>%
-  # right_join(df_muni) %>%
-  # # construct the expected and simulated hospitalizations
-  # group_by(municipality,age_group) %>%
-  # group_split() %>%
-  # lapply(function(df){
-  #   arrange(df,date) %>%
-  #     mutate(percentage_vax = lag(percentage_vax, n = 14, default = 0),
-  #            expected_hospitalizations_cf = hosp_rate * 10^(load-19) * population,
-  #            expected_hospitalizations = expected_hospitalizations_cf *
-  #                                           (1 - prevention_vax*percentage_vax),
-  #            simulated_hospitalizations = rpois(nrow(df),expected_hospitalizations),
-  #            simulated_hospitalizations_cf = rpois(nrow(df),expected_hospitalizations_cf))
-  # }) %>%
-  # bind_rows() 
-
-save(df_posteriors_hosp, df_muni,
-     file = paste0(outdir_res,Sys.Date(), "df_posteriors.RData"))
-save(fit_hospitalization, file = str_c( outdir_res, "fit_hosp", Sys.Date(), ".rda"))
-
-df_posteriors_hosp <- fit_hospitalization %>% 
-  recover_types( df_muni ) %>% 
-  stan_split(10,c("expected_hospitalizations","simulated_hospitalizations"),
-             c("hosp_parameter","sum_load")) %>%
-  future_map(function(x){spread_draws(x,c(expected_hospitalizations,simulated_hospitalizations)[date,municipality])}) %>% 
-  bind_rows() %>%
-  left_join( df_muni, c("date", "municipality") )
+               prevention_vax[age_group])
 
 # model selection based on predictive performance 
 # out-of-sample prediction for time series a la Vehtari possible?
@@ -111,7 +86,6 @@ df_posteriors_hosp <- fit_hospitalization %>%
 # loo(LL, r_eff=r_eff)
 # rm(r_eff)
 
-# save, rmeove, and load fit
 save(fit_hospitalization, file = here(outdir_out, "model_data", str_c( "fit_hosp_age", Sys.Date(), ".rda")))
 save(df_posteriors_hosp, df_fractions, file = here(outdir_out, "model_data", str_c( "posteriors_hosp_age", Sys.Date(), ".rda")))
 

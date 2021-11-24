@@ -59,7 +59,9 @@ df_posteriors <- fit %>%
   stan_split(10,c("load"),c("a_individual","load_population","log_likes_water")) %>%
   future_map(function(x){spread_draws(x,load[date,rwzi], x0, k )}) %>% 
   bind_rows() %>%
-  left_join( df_sewage ) # Get original data back in
+  left_join( df_sewage ) %>% # Get original data back in
+  ungroup() %>% 
+  mutate( date=as.Date(date) )
 
 
 save(fit, file = here( outdir_out, "model_data", str_c("fit_pspline_", Sys.Date(), ".rda")))

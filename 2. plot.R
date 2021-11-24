@@ -12,7 +12,7 @@ lastday <- min( lastday, max(df_viralload_human_regions$Datum))
 startday <- max( startday, min(df_viralload_human_regions$Datum))
 rm( df_viralload_human_regions )
 
-load( here( outdir_out, "model_data", str_c("posteriors_2021-10-28.rda")))
+load( here( outdir_out, "model_data", str_c("posteriors_2021-11-16.rda")))
 
 ###
 # Plot prob of detection
@@ -153,7 +153,6 @@ df_vaccins <- calc_vax(startday,lastday)
 df_muni <- calc_df_muni( df_posteriors, df_vaccins, startday, lastday )
 
 df_muni %>%
-  mutate( date=as.Date(date)) %>% #TODO dates as dates!
   group_by( municipality ) %>% 
   group_walk( function(x,y){
     max_h <- max(x$hospitalizations, na.rm=TRUE )
@@ -199,7 +198,6 @@ df_posteriors %>%
 ### 
 
 df_muni %>% 
-  mutate( date=as.Date(date) ) %>% 
   filter( municipality %in% c("Amsterdam","Rotterdam","s-Gravenhage",
                               "Utrecht","Eindhoven","Groningen","Tilburg","Almere","Breda" )) %>% 
   group_by( municipality ) %>% 
