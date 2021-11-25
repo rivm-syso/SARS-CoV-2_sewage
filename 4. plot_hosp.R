@@ -8,7 +8,7 @@ source( "functions.R")
 source( "settings.R")
 
 load( here( outdir_out, "model_data", str_c( "posteriors_hosp_age", Sys.Date(), ".rda")))
-
+load( here( outdir_out, "model_data", str_c("df_muni_age", Sys.Date(),".RData")))
 
 df_plot_hosp <- df_muni %>% 
   group_by(municipality) %>% 
@@ -39,10 +39,9 @@ df_plot_hosp <- df_muni %>%
   group_by(municipality) %>%
   group_split()
 
-save(df_plot_hosp,file = paste0(outdir_res,Sys.Date(), "df_plot.RData"))
+save(df_plot_hosp, file = here( outdir_out, "model_data", str_c("df_plot", Sys.Date(),".RData")))
 
 ##### We plot the fitted hospitalizations for each municipality #####
-
 df_plot_hosp %>% future_map(function(x){
     p <- list()
     for(i in sort(unique(x$age_group))){
@@ -69,13 +68,13 @@ df_plot_hosp %>% future_map(function(x){
     }
     
     ggsave( paste0( outdir_fig,"Leeftijd/hosp_", x$municipality[1], ".png"),
-            plot = grid.arrange(grobs = p, ncol = 2),
+            plot = wrap_plots(p, ncol = 2),
             width = 18, height = 4*ceiling(length(p)/2), units = "in")
     
     write_csv(x, paste0( outdir_out, "Leeftijd/hosp_",x$municipality[1], ".csv"))
 })
 
-#### We include the counter factuals in the case we did not have vaccinations ####
+#### We include the counterfactuals in the case we did not have vaccinations ####
 
 df_plot_hosp %>% future_map(function(x){
   p <- list()
@@ -108,7 +107,7 @@ df_plot_hosp %>% future_map(function(x){
   }
   
   ggsave( paste0( outdir_fig,"Leeftijd/cf_hosp_", x$municipality[1], ".png"),
-          plot = grid.arrange(grobs = p, ncol = 2),
+          plot = wrap_plots(p, ncol = 2),
           width = 18, height = 4*ceiling(length(p)/2), units = "in")
   
   write_csv(x, paste0( outdir_out, "Leeftijd/cf_hosp_",x$municipality[1], ".csv"))
@@ -176,7 +175,7 @@ df_posteriors_hosp_no_vax_age %>%
         legend.position = "none"
       )
     ggsave( paste0( outdir_fig,"Leeftijd/hosp_", x$municipality[1], ".png"),
-            plot = grid.arrange(p[[1]],p[[2]],p[[3]],p[[4]],p[[5]],p[[6]], nrow = 3),
+            plot = wrap_plots(p, nrow = 3),
             width = 8, height = 7.5, units = "in")
     
     write_csv(x, paste0( outdir_out, "Leeftijd/hosp_",x$municipality[1], ".csv"))})

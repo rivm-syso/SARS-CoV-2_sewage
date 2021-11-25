@@ -20,6 +20,9 @@ if( !dir.exists(here(outdir_fig, "safetyregion"))) {
 
 if( !dir.exists(here(outdir_fig, "manuscript"))) {
   dir.create(here(outdir_fig, "manuscript"))}
+if( !dir.exists(here(outdir_fig, "Leeftijd"))) {
+  dir.create(here(outdir_fig, "Leeftijd"))}
+
 
 outdir_out = "./output/"
 if( !dir.exists(outdir_out)) dir.create(outdir_out)
@@ -31,6 +34,8 @@ if( !dir.exists(here(outdir_out, "municipality_hosp"))) {
   dir.create(here(outdir_out, "municipality_hosp"))}
 if( !dir.exists(here(outdir_out, "safetyregion"))) {
   dir.create(here(outdir_out, "safetyregion"))}
+if( !dir.exists(here(outdir_out, "Leeftijd"))) {
+  dir.create(here(outdir_out, "Leeftijd"))}
 
 num_knots     <- 10
 spline_degree <- 3
