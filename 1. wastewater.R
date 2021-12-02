@@ -64,8 +64,8 @@ df_posteriors <- fit %>%
   mutate( date=as.Date(date) )
 
 
-save(fit, file = here( outdir_out, "model_data", str_c("fit_pspline_", Sys.Date(), ".rda")))
-save(df_posteriors, df_fractions, file = here( outdir_out, "model_data", str_c("posteriors_", Sys.Date(), ".rda")))
+save(fit, file = here( runname, "output", "model_data", "fit_pspline.RData"))
+save(df_posteriors, df_fractions, file = here( runname, "output", "model_data", "posteriors.RData"))
 
 # Removed model selection for now.
 

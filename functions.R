@@ -1,3 +1,7 @@
+load_if_needed <- function( object, filename ){
+  if( length(ls( pattern=object, envir = .GlobalEnv)) == 0 )
+    load( filename, envir = .GlobalEnv )
+}
 
 calc_df_muni <-function(df_posteriors, df_vaccins, startday,lastday,age = 5){
   # We create the data frame with waste water data and the viral load.

@@ -7,12 +7,14 @@ library( furrr )
 source( "functions.R")
 source( "settings.R")
 
-load( viralload_filename )
+load_if_needed( "df_viralload_human_regions", viralload_filename )
+
 lastday <- min( lastday, max(df_viralload_human_regions$Datum))
 startday <- max( startday, min(df_viralload_human_regions$Datum))
 rm( df_viralload_human_regions )
 
-load( here( outdir_out, "model_data", str_c("posteriors_2021-11-16.rda")))
+load_if_needed( "df_posteriors", here( runname, "output", "model_data", "posteriors.RData") )
+
 
 ###
 # Plot prob of detection
@@ -38,7 +40,7 @@ df_posteriors %>%
     panel.grid.minor = element_blank(),
     legend.position = "none"
   )
-ggsave(str_c( outdir_fig,  "prob_detection.png"), width = 6.5, height = 4.5, units = "in")
+ggsave( here(runname, "figures", "model_data", "prob_detection.png"), width = 6.5, height = 4.5, units = "in")
 
 ###
 # Plot the Netherlands
@@ -64,7 +66,7 @@ df_posteriors %>%
     panel.grid.minor = element_blank(),
     legend.position = "none"
   )
-ggsave( here( outdir_fig, "Netherlands", "posterior.png" ), width = 6.5, height = 4.5, units = "in")
+ggsave( here( runname,"Figures", "Netherlands", "posterior.png" ), width = 6.5, height = 4.5, units = "in")
 
 ###
 # Plot each RWZI, write CSV
@@ -93,10 +95,10 @@ df_posteriors %>%
         panel.grid.major = element_line(size = 0.7),
         panel.grid.minor = element_blank(),
         legend.position = "none" )
-    ggsave( here( outdir_fig, "RWZI", str_c( y[1,1], ".png")),
+    ggsave( here( runname, "figures", "RWZI", str_c( y[1,1], ".png")),
             plot = p, width = 6.5, height = 4.5, units = "in")
     
-    write_csv(x, here( outdir_out, "RWZI", str_c( y[1,1], ".csv")))})
+    write_csv(x, here( runname, "output", "RWZI", str_c( y[1,1], ".csv")))})
 
 ##
 # make figure for manuscript
@@ -129,7 +131,7 @@ df_posteriors %>%
         legend.position = "none" )}) %>% 
   reduce( `+` ) + # Patchwork composer of plots
   plot_layout(ncol = 3)
-ggsave(  here( outdir_fig, "manuscript", "figure2_9plants.png"),width = 16, height = 11, units = "in")
+ggsave(  here( runname, "figures", "manuscript", "figure2_9plants.png"),width = 16, height = 11, units = "in")
 
 
 ###
@@ -143,14 +145,14 @@ df_posteriors %>%
   median_qi( load ) %>% 
   select(-.width, -.point, -.interval ) %>% 
   pivot_wider( names_from=date, values_from=c(load, .lower, .upper ) ) %>% 
-  write_csv2( str_c( outdir_out, "output_compare.csv"))
+  write_csv2(  here( runname, "output", "output_compare.csv"))
 
 ###
 # Municipality level
 ###
 
 df_vaccins <- calc_vax(startday,lastday)
-df_muni <- calc_df_muni( df_posteriors, df_vaccins, startday, lastday )
+df_muni    <- calc_df_muni( df_posteriors, df_vaccins, startday, lastday )
 
 df_muni %>%
   group_by( municipality ) %>% 
@@ -171,9 +173,9 @@ df_muni %>%
         panel.grid.major = element_line(size = 0.7),
         panel.grid.minor = element_blank(),
         legend.position = "none")
-    ggsave( here(outdir_fig, "municipality", str_c(y[1,1], ".png" )),
+    ggsave( here( runname, "figures", "municipality", str_c(y[1,1], ".png" )),
             plot = p, width = 6.5, height = 4.5, units = "in" )
-    write_csv(x, here( outdir_out, "municipality", str_c( y[1,1], ".csv"))) } )
+    write_csv(x, here( runname, "output", "municipality", str_c( y[1,1], ".csv"))) } )
 
 ###
 # Compare 0,7,14 days before last date, by municipality
@@ -190,11 +192,12 @@ df_posteriors %>%
   median_qi( load ) %>% 
   select(-.width, -.point, -.interval ) %>% 
   pivot_wider( names_from=date, values_from=c(load, .lower, .upper ) ) %>% 
-  write_csv2( str_c( outdir_out, "output_compare_muni.csv"))
+  write_csv2( here( runname, "output", "output_compare_muni.csv"))
 
 ###
 # make figure for manuscript
 # largest municipalities are 16, 249, 252, 292
+# TODO: confidence bands
 ### 
 
 df_muni %>% 
@@ -219,7 +222,7 @@ df_muni %>%
         legend.position = "none") }) %>% 
   reduce( `+` ) +
   plot_layout( ncol=3)
-ggsave(here( outdir_fig, "manuscript",  "figure3_9municipalities.png" ),width = 16, height = 11,units = "in")
+ggsave(here( runname, "figures", "manuscript", "figure3_9municipalities.png" ),width = 16, height = 11,units = "in")
 
 ###
 # Plots by safety region
@@ -248,6 +251,6 @@ df_posteriors %>%
         panel.grid.minor = element_blank(),
         legend.position = "none"
       )
-    ggsave( here( outdir_fig, "safetyregion", str_c(y[1,1], ".png" )),
+    ggsave( here( runname, "figures", "safetyregion", str_c(y[1,1], ".png" )),
             plot = p, width = 6.5, height = 4.5, units = "in" )
-    write_csv(x, here(outdir_out, "safetyregion", str_c(y[1,1],".csv")))})
+    write_csv(x, here(runname, "output", "safetyregion", str_c(y[1,1],".csv")))})
