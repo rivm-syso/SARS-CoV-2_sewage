@@ -3,11 +3,19 @@ load_if_needed <- function( object, filename ){
     load( filename, envir = .GlobalEnv )
 }
 
+
 calc_df_muni <-function(df_posteriors, df_vaccins, startday,lastday,age = 5){
   # We create the data frame with waste water data and the viral load.
   # The optional input age can either be a single multiple of 5 which will 
   # determine equally sized age groups, or a vector with explicit age groups
   # of the form "5n - 5m-1".
+  
+  # Fractions of municipalities and VR's in RWZI's
+  df_fractions <- df_viralload_human_regions %>%
+    select( municipality, rwzi=RWZI, municipality_pop=Inwoneraantal_municipality, starts_with( "frac" )) %>%
+    unique()
+  
+  
   df_muni <- df_posteriors %>% 
     filter( between( date, startday, lastday ) ) %>%
     group_by( municipality,date ) %>% 
