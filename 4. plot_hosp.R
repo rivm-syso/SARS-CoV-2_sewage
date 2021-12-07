@@ -7,8 +7,8 @@ library( furrr )
 source( "functions.R")
 source( "settings.R")
 
-load( here( outdir_out, "model_data", str_c( "posteriors_hosp_age", Sys.Date(), ".rda")))
-load( here( outdir_out, "model_data", str_c("df_muni_age", Sys.Date(),".RData")))
+load_if_needed( "df_posteriors_hosp", here( runname, "output", "model_data", "posteriors_hosp_age.RData") )
+load_if_needed( "^df_muni", here( runname, "output", "model_data", "df_muni_age.RData")) # Note ^ in regular expression to avoid finding "calc_df_muni"
 
 df_plot_hosp <- df_muni %>% 
   group_by(municipality) %>% 
@@ -39,7 +39,7 @@ df_plot_hosp <- df_muni %>%
   group_by(municipality) %>%
   group_split()
 
-save(df_plot_hosp, file = here( outdir_out, "model_data", str_c("df_plot", Sys.Date(),".RData")))
+save(df_plot_hosp, file = here( runname, "output" , "model_data", "df_plot.RData"))
 
 ##### We plot the fitted hospitalizations for each municipality #####
 df_plot_hosp %>% future_map(function(x){
@@ -67,11 +67,11 @@ df_plot_hosp %>% future_map(function(x){
         )
     }
     
-    ggsave( paste0( outdir_fig,"Leeftijd/hosp_", x$municipality[1], ".png"),
+    ggsave( here(runname,"figures", "Leeftijd", str_c("hosp_", x$municipality[1], ".png")),
             plot = wrap_plots(p, ncol = 2),
             width = 18, height = 4*ceiling(length(p)/2), units = "in")
     
-    write_csv(x, paste0( outdir_out, "Leeftijd/hosp_",x$municipality[1], ".csv"))
+    write_csv(x,  here(runname, "output", "Leeftijd", str_c("hosp_", x$municipality[1], ".csv")))
 })
 
 #### We include the counterfactuals in the case we did not have vaccinations ####
@@ -106,9 +106,9 @@ df_plot_hosp %>% future_map(function(x){
       )
   }
   
-  ggsave( paste0( outdir_fig,"Leeftijd/cf_hosp_", x$municipality[1], ".png"),
+  ggsave( here(runname, "figures", "Leeftijd", str_c("cf_hosp_", x$municipality[1], ".png")),
           plot = wrap_plots(p, ncol = 2),
           width = 18, height = 4*ceiling(length(p)/2), units = "in")
   
-  write_csv(x, paste0( outdir_out, "Leeftijd/cf_hosp_",x$municipality[1], ".csv"))
+  write_csv(x, here( runname, "output", "Leeftijd", str_c("cf_hosp_",x$municipality[1], ".csv")))
 })
