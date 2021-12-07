@@ -70,17 +70,21 @@ calc_df_muni <-function(df_posteriors, df_vaccins, startday,lastday,age = 5){
     return(df_muni)
 }
 
+
 calc_vax <- function( startday,lastday){
   df_vaccins <- read.csv(vaccin_filename) %>%
     filter(between(as.Date(Datum_1eprik),startday,lastday)) %>%
     select("date" = "Datum_1eprik",
            "municipality" = "Gemeente",
-           "age_group" = "Leeftijdsgroep5",
+           "age_group" = "Leeftijdsgroep",
            "population" = "Populatie",
            "percentage_vax" = "Vaccinatiegraad_coronit_cims") %>%
     # Percentages kunnen nooit meer dan 1/100% zijn.
     mutate(percentage_vax = if_else(percentage_vax > 100,1,percentage_vax/100)) %>%
     filter(age_group != "Niet vermeld")
+  
+  # Update the final day to match with the vaccin data
+  lastday <- as.Date(max(df_vaccins$date))
   
   # We match each municipality and age_group with the same number of population
   # independent of the day, hence we make a help-tibble with the populations
@@ -94,11 +98,12 @@ calc_vax <- function( startday,lastday){
     select(-population)
   
   df_ziekenhuisopnames <- read.csv(hosp_filename) %>%
-    filter(between(as.Date(Date_of_statistics),startday,lastday)) %>%
-    select("date" = "Date_of_statistics",
+    filter(between(as.Date(AdmissionDate_Pid),startday,lastday)) %>%
+    select("date" = "AdmissionDate_Pid",
            "municipality" = "Gemeente",
            "age_group" = "Leeftijdsgroep5",
-           "hospitalizations" = "Hospital_admission") %>%
+           "hospitalizations" = "Hospital_admissions") %>%
+    filter(!is.na(municipality) & (age_group != "Niet vermeld")) %>%
     # Eerst voegen we de populaties toe aan de vaccinatiedata
     left_join(df_vaccins_pop,by = c("municipality","age_group")) %>%
     # Daarna voegen we de vaccinaties toe, en vullen die aan met nullen
@@ -255,3 +260,5 @@ stan_split <- function(fit_hospitalization,num_groups,parameters,par_ignore){
   
   return(fit_hosp_list)
 }
+
+functions_sourced <- T

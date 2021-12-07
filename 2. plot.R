@@ -4,8 +4,12 @@ library( patchwork )
 library( here )
 library( furrr )
 
-source( "functions.R")
-source( "settings.R")
+if(!exists("functions_sourced")){
+  source( "0. functions.R" )
+}
+if(!exists("settings_sourced")){
+  source( "0. settings.R" )
+}
 
 load_if_needed( "df_viralload_human_regions", viralload_filename )
 

@@ -9,8 +9,12 @@ library( furrr )
 
 setwd( here() )
 
-source( "functions.R")
-source( "settings.R" )
+if(!exists("functions_sourced")){
+  source( "0. functions.R" )
+}
+if(!exists("settings_sourced")){
+  source( "0. settings.R" )
+}
 
 #options(buildtools.check = NULL)
 rstan_options(auto_write = TRUE)

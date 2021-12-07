@@ -8,8 +8,12 @@ library(furrr)
 plan(multisession, workers = 10)
 
 setwd( here() )
-source( "functions.R" )
-source( "settings.R" )
+if(!exists("functions_sourced")){
+  source( "0. functions.R" )
+}
+if(!exists("settings_sourced")){
+  source( "0. settings.R" )
+}
 
 ###
 # Model Run
@@ -52,7 +56,7 @@ fit <- stan(
   pars = c("k", "x0", "sigma_observations", "RWvar", "load" )
 )
 
-traceplot(fit, pars = c("k", "x0", "sigma_observations", "RWvar"))
+print(traceplot(fit, pars = c("k", "x0", "sigma_observations", "RWvar")))
 
 df_posteriors <- fit %>% 
   recover_types( df_sewage ) %>%

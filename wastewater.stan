@@ -82,9 +82,9 @@ transformed data {
   }
   
   /* construction of splines */	    
-  knots[1]=0;
+  knots[1]=1;
   for( t in 2:num_knots){
-    knots[t] = knots[t-1] + n_date * 1.0 / (num_knots - 1); //1.0 avoids rouding
+    knots[t] = knots[t-1] + (n_date - 1) * 1.0 / (num_knots - 1); //1.0 avoids rouding
   }
   
   ext_knots_temp = append_row(rep_vector(knots[1], spline_degree), knots);
