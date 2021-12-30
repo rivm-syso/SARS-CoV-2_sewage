@@ -1,5 +1,9 @@
 load_if_needed <- function( object, filename ){
-  if( length(ls( pattern=object, envir = .GlobalEnv)) == 0 )
+# Object becomes a list in case we need to load multiple file from the same file
+    if( object %>% 
+      lapply(function(object){
+        length(ls( pattern=object, envir = .GlobalEnv)) == 0}) %>%
+      c(recursive = T) %>% any())
     load( filename, envir = .GlobalEnv )
 }
 

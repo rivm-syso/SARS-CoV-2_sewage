@@ -1,8 +1,16 @@
+#### TODO: Keep an eye on the memory use of df_posteriors, and when needed
+####       don't create df_posteriors, but compute median(qi) load in parallel
+####       for each rwzi seperate and combine them later
+####
+####       Willen we de figuren met ziekenhuisopnames e.d. hier behouden? 177 e.v.
+
 library( tidyverse )
 library( tidybayes )
 library( patchwork )
 library( here )
 library( furrr )
+
+plan(multisession, workers = 10)
 
 if(!exists("functions_sourced")){
   source( "0. functions.R" )
@@ -15,9 +23,10 @@ load_if_needed( "df_viralload_human_regions", viralload_filename )
 
 lastday <- min( lastday, max(df_viralload_human_regions$Datum))
 startday <- max( startday, min(df_viralload_human_regions$Datum))
-rm( df_viralload_human_regions )
+# rm( df_viralload_human_regions ) # Needed to construct df_muni later on
 
-load_if_needed( "df_posteriors", here( runname, "output", "model_data", "posteriors.RData") )
+load_if_needed( list("df_posteriors","df_fractions"),
+                here( runname, "output", "model_data", "posteriors.Rdata" ) )
 
 
 ###
@@ -77,13 +86,18 @@ ggsave( here( runname,"Figures", "Netherlands", "posterior.png" ), width = 6.5, 
 ###
 df_posteriors %>% 
   select( date, load, concentration, rwzi ) %>%
-  group_by( date, rwzi, measurement=concentration ) %>% 
-  median_qi( load ) %>%
-  mutate( zeromeasurement = ifelse(measurement == 0, load, -2),
-          date=as.Date(as.character(date)),
-          rwzi=as.character(rwzi)) %>% 
+  group_by( rwzi) %>% 
+  group_split() %>%
+  future_map(function(x){
+    group_by(x,date, rwzi,measurement = concentration) %>%
+      median_qi(load) %>%
+      mutate( zeromeasurement = ifelse(measurement == 0, load, -2),
+              date=as.Date(as.character(date)),
+              rwzi=as.character(rwzi))}, .options = furrr_options(seed = T)) %>%
+  bind_rows() %>%
   group_by( rwzi ) %>% 
-  group_walk( function(x,y){
+  group_split() %>%
+  future_walk( function(x, y = x$rwzi[1]){
     p <- ggplot(x, mapping = aes(x = date,y = load,ymin = .lower, ymax=.upper) ) +
       geom_ribbon(alpha = 0.25) +
       geom_line(color = cbPalette[6]) +
@@ -92,17 +106,17 @@ df_posteriors %>%
       coord_cartesian(ylim = c(11, 15)) +
       scale_x_date("Date", date_breaks = "2 month", date_labels = "%m/%y") + #"%b"
       scale_y_continuous("Log(load)") +
-      ggtitle(y[1,1]) +
+      ggtitle(y) +
       theme_bw(base_size = 20) +
       theme(
         plot.title = element_text(color = cbPalette[6]),
         panel.grid.major = element_line(size = 0.7),
         panel.grid.minor = element_blank(),
         legend.position = "none" )
-    ggsave( here( runname, "figures", "RWZI", str_c( y[1,1], ".png")),
+    ggsave( here( runname, "figures", "RWZI", str_c( y, ".png")),
             plot = p, width = 6.5, height = 4.5, units = "in")
     
-    write_csv(x, here( runname, "output", "RWZI", str_c( y[1,1], ".csv")))})
+    write_csv(x, here( runname, "output", "RWZI", str_c( y, ".csv")))})
 
 ##
 # make figure for manuscript
@@ -110,14 +124,19 @@ df_posteriors %>%
 ##
 df_posteriors %>% 
   select( date, load, concentration, rwzi ) %>%
-  filter( as.numeric(rwzi) %in% c(123, 16, 82, 69, 294, 267, 154, 187, 24)) %>% 
-  group_by( date, rwzi, measurement=concentration ) %>% 
-  median_qi( load ) %>%
-  mutate( zeromeasurement = ifelse(measurement == 0, load, -2),
-          date=as.Date(as.character(date)),
-          rwzi=as.character(rwzi)) %>% 
+  filter( as.numeric(rwzi) %in% c(123, 16, 82, 69, 294, 267, 154, 187, 24)) %>%
+  group_by(rwzi) %>%
+  group_split() %>%
+  future_map(function(x){
+    group_by(x, date, rwzi, measurement=concentration ) %>% 
+    median_qi( load ) %>%
+    mutate( zeromeasurement = ifelse(measurement == 0, load, -2),
+            date=as.Date(as.character(date)),
+            rwzi=as.character(rwzi))}) %>% 
+  bind_rows() %>%
   group_by( rwzi ) %>% 
-  group_map( function(x,y){
+  group_split() %>%
+  future_map( function(x,y = x$rwzi[1]){
     p <- ggplot(x, mapping = aes(x = date,y = load,ymin = .lower, ymax=.upper) ) +
       geom_ribbon(alpha = 0.25) +
       geom_line(color = cbPalette[7]) +
@@ -126,7 +145,7 @@ df_posteriors %>%
       coord_cartesian(ylim = c(11, 15)) +
       scale_x_date("Date", date_breaks = "2 month", date_labels = "%m/%y") + #"%b"
       scale_y_continuous("Log(load)") +
-      ggtitle(y[1,1]) +
+      ggtitle(y) +
       theme_bw(base_size = 20) +
       theme(
         plot.title = element_text(color = cbPalette[7]),
@@ -143,10 +162,14 @@ ggsave(  here( runname, "figures", "manuscript", "figure2_9plants.png"),width = 
 ###
 df_posteriors %>%
   ungroup() %>% 
-  mutate( date = as.Date( as.character( date))) %>% 
+ # mutate( date = as.Date( as.character( date))) %>% 
   filter( date %in% (max(date) - c(0, 7, 14)  ) ) %>% 
-  group_by( rwzi, date ) %>% 
-  median_qi( load ) %>% 
+  group_by( rwzi ) %>%
+  group_split() %>%
+  future_map(function(x){
+    group_by(x, rwzi, date ) %>% 
+    median_qi( load ) }) %>%
+  bind_rows() %>%
   select(-.width, -.point, -.interval ) %>% 
   pivot_wider( names_from=date, values_from=c(load, .lower, .upper ) ) %>% 
   write_csv2(  here( runname, "output", "output_compare.csv"))
@@ -160,14 +183,15 @@ df_muni    <- calc_df_muni( df_posteriors, df_vaccins, startday, lastday )
 
 df_muni %>%
   group_by( municipality ) %>% 
-  group_walk( function(x,y){
+  group_split() %>%
+  future_walk( function(x,y = x$municipality[1]){
     max_h <- max(x$hospitalizations, na.rm=TRUE )
     p<- ggplot(x, mapping = aes(x = date)) +
       geom_line(aes(y = load), color = cbPalette[7]) +
       # TODO: put confidence bounds back in.
       #geom_ribbon(aes(ymin = .lower, ymax = .upper ), alpha = 0.25) +
       geom_point( aes(x = date, y = 10 + (hospitalizations*5)/max_h), color = cbPalette[7]) +
-      ggtitle(y[1,1]) +
+      ggtitle(y) +
       scale_y_continuous(name = "Log(load)", sec.axis = sec_axis(~(-2*max_h +(.* max_h/5)), name = "Hospitalizations")) +
       coord_cartesian(ylim = c(11, 15)) +
       scale_x_date( "Date", date_breaks = "2 month", date_labels = "%m/%y") + #"%b"
@@ -177,9 +201,9 @@ df_muni %>%
         panel.grid.major = element_line(size = 0.7),
         panel.grid.minor = element_blank(),
         legend.position = "none")
-    ggsave( here( runname, "figures", "municipality", str_c(y[1,1], ".png" )),
+    ggsave( here( runname, "figures", "municipality", str_c(y, ".png" )),
             plot = p, width = 6.5, height = 4.5, units = "in" )
-    write_csv(x, here( runname, "output", "municipality", str_c( y[1,1], ".csv"))) } )
+    write_csv(x, here( runname, "output", "municipality", str_c( y, ".csv"))) } )
 
 ###
 # Compare 0,7,14 days before last date, by municipality
@@ -233,18 +257,23 @@ ggsave(here( runname, "figures", "manuscript", "figure3_9municipalities.png" ),w
 # TODO: the linking to VR fractions should be precalculated!
 ###
 df_posteriors %>%
-  group_by( date, vr, .draw ) %>%
-  mutate( vr_persons = sum(rwzi_persons) ) %>% 
-  summarize( load = log10( sum( rwzi_persons * 10^load ) / vr_persons ), .groups="drop_last" ) %>% 
-  median_qi( load ) %>%
-  mutate( vr=as.character(vr),
-          date=as.Date(as.character(date))) %>% 
+  group_by( vr ) %>%
+  group_split() %>%
+  future_map(function(x){
+    group_by(x, date, vr, .draw ) %>%
+      mutate( vr_persons = sum(rwzi_persons) ) %>% 
+      summarize( load = log10( sum( rwzi_persons * 10^load ) / vr_persons ), .groups="drop_last" ) %>% 
+      median_qi( load ) %>%
+      mutate( vr=as.character(vr),
+              date=as.Date(as.character(date)))}) %>% 
+  bind_rows() %>%
   group_by( vr ) %>% 
-  group_walk( function(x,y){  
+  group_split() %>%
+  future_walk( function(x,y = x$vr[1]){  
     p <-ggplot(x) +
       geom_ribbon(aes( x=date, ymin=.lower, ymax=.upper), alpha = 0.25) +
       geom_line(aes( x=date, y=load), color = cbPalette[5]) +
-      ggtitle(y[1,1]) +
+      ggtitle(y) +
       coord_cartesian(ylim = c(11, 14.5)) +
       scale_x_date("Date",date_breaks = "2 month", date_labels = "%m/%y") + 
       scale_y_continuous("Log(load)") +
@@ -255,6 +284,6 @@ df_posteriors %>%
         panel.grid.minor = element_blank(),
         legend.position = "none"
       )
-    ggsave( here( runname, "figures", "safetyregion", str_c(y[1,1], ".png" )),
+    ggsave( here( runname, "figures", "safetyregion", str_c(y, ".png" )),
             plot = p, width = 6.5, height = 4.5, units = "in" )
-    write_csv(x, here(runname, "output", "safetyregion", str_c(y[1,1],".csv")))})
+    write_csv(x, here(runname, "output", "safetyregion", str_c(y,".csv")))})

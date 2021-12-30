@@ -27,8 +27,8 @@ plan(multisession, workers = 10)
 # Load files
 # 
 load_if_needed( "df_viralload_human_regions", viralload_filename )
-load_if_needed( "fit", here( runname, "output", "model_data", "fit_pspline.RData" ) )
-load_if_needed( "df_posteriors", here( runname, "output", "model_data", "posteriors.Rdata" ) )
+load_if_needed( list("df_posteriors","df_fractions"),
+                here( runname, "output", "model_data", "posteriors.Rdata" ) )
 
 df_vaccins <- calc_vax(startday,lastday) # Calculate the percentage of vaccinated individuals per municipality
 
@@ -54,9 +54,9 @@ fit_hospitalization = stan(
   "hospitalizations.stan",
   model_name = "wastewater_model",
   data = compose_data(
-    max_delay = 0,
-    ref_load = 19,
-    delay_vax = 14,
+    max_delay = max_delay,
+    ref_load = ref_load,
+    delay_vax = delay_vax,
     df_muni %>% mutate( date=as.factor(date))),
   init = initials_hosp,
   chains = 4,

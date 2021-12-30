@@ -50,7 +50,7 @@ fit <- stan(
   data = datalist,
   init = initials,
   chains = n_chains,
-  iter = 80,
+  iter = 200,
   thin = 5,
   control = list(adapt_delta = 0.7, max_treedepth = 12),
   pars = c("k", "x0", "sigma_observations", "RWvar", "load" )
