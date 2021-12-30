@@ -43,7 +43,7 @@ df_muni <- calc_df_muni(df_posteriors, df_vaccins, startday,lastday, 20 )
 rm( df_posteriors )
 
 # Save calculated data frames per age group
-save(df_vaccins,file = here( runname, "output", "model_data", "df_vaccins_age.RData"))
+# save(df_vaccins,file = here( runname, "output", "model_data", "df_vaccins_age.RData"))
 save(df_muni,file = here( runname, "output", "model_data", "df_muni_age.RData"))
 
 # TODO: is this really needed?
