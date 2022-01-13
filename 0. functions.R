@@ -76,16 +76,24 @@ calc_df_muni <-function(df_posteriors, df_vaccins, startday,lastday,age = 5){
 
 
 calc_vax <- function( startday,lastday){
-  df_vaccins <- read.csv(vaccin_filename) %>%
-    filter(between(as.Date(Datum_1eprik),startday,lastday)) %>%
-    select("date" = "Datum_1eprik",
+  df_vaccins <- read.csv2(vaccin_filename) %>%
+    filter(between(as.Date(Prikdatum),startday,lastday)) %>%
+    select("date" = "Prikdatum",
            "municipality" = "Gemeente",
-           "age_group" = "Leeftijdsgroep",
+           "age_group" = "Geboortecohort",
            "population" = "Populatie",
-           "percentage_vax" = "Vaccinatiegraad_coronit_cims") %>%
+           "percentage_vax" = "Vaccinatiegraad.vaccinatie.gestart") %>%
     # Percentages kunnen nooit meer dan 1/100% zijn.
-    mutate(percentage_vax = if_else(percentage_vax > 100,1,percentage_vax/100)) %>%
-    filter(age_group != "Niet vermeld")
+    mutate(percentage_vax = as.numeric(percentage_vax),
+           percentage_vax = if_else(percentage_vax > 100,1,percentage_vax/100)) %>%
+    filter(age_group != "Geboortejaar onbekend" & municipality != "Ontbreekt") %>%
+    # Verander de geboorte-cohorten in leeftijdsgroepen
+    mutate(age_group = 
+             paste0(2020 - as.numeric(str_extract(age_group,"[0-9]{4}$")),
+                    "-",
+                    2020 - as.numeric(str_extract(age_group,"^[0-9]{4}"))),
+           age_group = str_replace(age_group,"-NA","+"),
+           age_group = str_replace(age_group,"^-.*?-","0-"))
   
   # Update the final day to match with the vaccin data
   lastday <- as.Date(max(df_vaccins$date))

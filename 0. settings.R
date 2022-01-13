@@ -13,9 +13,9 @@ lastday  <- as.Date("2021-12-31")
 # it is the last file 
 vaccin_mapname <- "/rivm/r/COVID-19/Toegang_externen/ZO_Rioolwater/EPI_Tabellen/"
 
-vaccin_filename <-  list.files(vaccin_mapname,pattern = "vaccinatiegraad_leeftijdsgroep_gemeente.+csv$",
+vaccin_filename <-  list.files(vaccin_mapname,pattern = "vaccinatiegraad.+_gemeente.+\\.csv$",
                                full.names = T) %>% sort(decreasing = T) %>% .[1]
-hosp_filename <- list.files(vaccin_mapname,pattern = "ziekenhuisopnames_gemeenten_leeftijdsgroepen.+csv$",
+hosp_filename <- list.files(vaccin_mapname,pattern = "ziekenhuisopnames_gemeenten.+\\.csv$",
                             full.names = T) %>% sort(decreasing = T) %>% .[1]
 
 dir.create.if.needed <- function(x){
