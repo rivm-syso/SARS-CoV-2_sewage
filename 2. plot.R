@@ -10,8 +10,6 @@ library( patchwork )
 library( here )
 library( furrr )
 
-plan(multisession, workers = 10)
-
 if(!exists("functions_sourced")){
   source( "0. functions.R" )
 }

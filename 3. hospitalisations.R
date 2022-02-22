@@ -20,9 +20,6 @@ if(!exists("settings_sourced")){
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
-# Number of cores for furrr
-plan(multisession, workers = 10)
-
 #
 # Load files
 # 
@@ -45,9 +42,6 @@ rm( df_posteriors )
 # Save calculated data frames per age group
 # save(df_vaccins,file = here( runname, "output", "model_data", "df_vaccins_age.RData"))
 save(df_muni,file = here( runname, "output", "model_data", "df_muni_age.RData"))
-
-# TODO: is this really needed?
-future:::ClusterRegistry("stop")
 
 # run Stan model
 fit_hospitalization = stan(

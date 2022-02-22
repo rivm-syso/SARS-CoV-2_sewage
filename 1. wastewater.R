@@ -5,8 +5,6 @@ library(loo)
 library(tidybayes)
 library(furrr)
 
-plan(multisession, workers = 10)
-
 setwd( here() )
 if(!exists("functions_sourced")){
   source( "0. functions.R" )

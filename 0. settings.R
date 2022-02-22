@@ -1,6 +1,7 @@
 # Needed for finding the most recent datafiles from EPI
 library(tidyverse)
 library(here)
+library(furrr)
 
 # Under this subfolder, all relevant files will be written
 runname <- "results/14-december_15_knopen"
@@ -58,5 +59,7 @@ max_delay     <- 0
 ref_load      <- 19
 delay_vax     <- 14
 
+# Number of cores for parallelization
+plan(multisession, workers = 10)
 
 settings_sourced <- T
