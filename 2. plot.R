@@ -176,7 +176,7 @@ df_posteriors %>%
 # Municipality level
 ###
 
-df_vaccins <- calc_vax(startday,lastday)
+df_vaccins <- calc_vax(startday,lastday,delay_vax)
 df_muni    <- calc_df_muni( df_posteriors, df_vaccins, startday, lastday )
 
 df_muni %>%

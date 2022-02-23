@@ -27,7 +27,7 @@ load_if_needed( "df_viralload_human_regions", viralload_filename )
 load_if_needed( list("df_posteriors","df_fractions"),
                 here( runname, "output", "model_data", "posteriors.Rdata" ) )
 
-df_vaccins <- calc_vax(startday,lastday) # Calculate the percentage of vaccinated individuals per municipality
+df_vaccins <- calc_vax(startday,lastday,delay_vax) # Calculate the percentage of vaccinated individuals per municipality
 
 # Clip first and last day such that all data frames span the same time period
 lastday  <- min( lastday,  max(df_posteriors$date), max(df_vaccins$date), max(df_viralload_human_regions$Datum))
@@ -50,7 +50,6 @@ fit_hospitalization = stan(
   data = compose_data(
     max_delay = max_delay,
     ref_load = ref_load,
-    delay_vax = delay_vax,
     df_muni %>% mutate( date=as.factor(date))),
   init = initials_hosp,
   chains = 4,

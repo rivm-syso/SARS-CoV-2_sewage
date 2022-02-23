@@ -75,17 +75,27 @@ calc_df_muni <-function(df_posteriors, df_vaccins, startday,lastday,age = 5){
 }
 
 
-calc_vax <- function( startday,lastday){
+calc_vax <- function( startday,lastday,delay_vax){
   df_vaccins <- read.csv2(vaccin_filename) %>%
-    filter(between(as.Date(Prikdatum),startday,lastday)) %>%
+    filter(between(as.Date(Prikdatum),startday - delay_vax ,lastday)) %>%
     select("date" = "Prikdatum",
            "municipality" = "Gemeente",
            "age_group" = "Geboortecohort",
            "population" = "Populatie",
            "percentage_vax" = "Vaccinatiegraad.vaccinatie.gestart") %>%
-    # Percentages kunnen nooit meer dan 1/100% zijn.
+    # Percentages kunnen nooit meer dan 1/100% zijn. 
     mutate(percentage_vax = as.numeric(percentage_vax),
            percentage_vax = if_else(percentage_vax > 100,1,percentage_vax/100)) %>%
+    # De vaccinaties werken niet direct, verschuif daarom de datum
+    group_by(age_group,municipality) %>%
+    group_split() %>%
+    future_map(function(df){
+      arrange(df,date) %>%
+        mutate(percentage_vax = dplyr::lag(percentage_vax, n = delay_vax, default = 0)) %>%
+        filter(as.Date(date) >= startday)
+    }) %>%
+    bind_rows() %>%
+    ungroup() %>%
     filter(age_group != "Geboortejaar onbekend" & municipality != "Ontbreekt") %>%
     # Verander de geboorte-cohorten in leeftijdsgroepen
     mutate(age_group = 

@@ -34,29 +34,27 @@ data {
   int hospitalizations[n];        // now included at the level of sewage plants
 
   int ref_load;                   // reference sewage load for hospitalization rates
-  int delay_vax;                  // Delay between administration of vaccin and effectiveness
-                                  // Perhaps make this another parameter
 }
 
 /* The vaccins have a delay between administration and effectiveness, hence we 
 shift the vaccination coverage in the data */
-transformed data {
-  real<lower=0, upper = 1> percentage_vax_mat[n_date,n_municipality,n_age_group];
-  vector<lower = 0, upper = 1>[n] percentage_vax_delay;
-
-  for( i in 1:n ){
-      percentage_vax_mat[date[i],municipality[i],age_group[i]] = percentage_vax[i];
-  }
-  
-  // Shift the vaccination data by delay_vax
-  for(i in 1:n){
-    if(date[i] - delay_vax <= 0){
-      percentage_vax_delay[i] = 0;
-    } else {
-      percentage_vax_delay[i] = percentage_vax_mat[date[i]-delay_vax,municipality[i],age_group[i]];
-    }
-  }
-}
+// transformed data {
+//   real<lower=0, upper = 1> percentage_vax_mat[n_date,n_municipality,n_age_group];
+//   vector<lower = 0, upper = 1>[n] percentage_vax_delay;
+// 
+//   for( i in 1:n ){
+//       percentage_vax_mat[date[i],municipality[i],age_group[i]] = percentage_vax[i];
+//   }
+//   
+//   // Shift the vaccination data by delay_vax
+//   for(i in 1:n){
+//     if(date[i] - delay_vax <= 0){
+//       percentage_vax_delay[i] = 0;
+//     } else {
+//       percentage_vax_delay[i] = percentage_vax_mat[date[i]-delay_vax,municipality[i],age_group[i]];
+//     }
+//   }
+// }
 
 parameters {
   /* hospitalization rates and hospitalization delay */
@@ -91,7 +89,7 @@ model {
  }
 
   hosp_parameter = hosp_rate_vector .*
-                    (1 - prevention_vax_vector .* percentage_vax_delay) .*
+                    (1 - prevention_vax_vector .* percentage_vax) .*
                     sum_load .*
                     population;
   

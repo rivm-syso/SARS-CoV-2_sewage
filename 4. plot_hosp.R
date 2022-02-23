@@ -19,13 +19,6 @@ df_plot_hosp <- df_muni %>%
   group_split() %>%
   future_map(function(x){
     left_join(x,df_posteriors_hosp, by = c("municipality", "age_group")) %>%
-      group_by(age_group, .draw) %>%
-      group_split() %>%
-      lapply(function(df){
-        arrange(df,date) %>%
-          mutate(percentage_vax = lag(percentage_vax, n = delay_vax, default = 0))
-        }) %>%
-      bind_rows() %>%
       mutate(expected_hospitalizations_cf = hosp_rate * 10^(load - ref_load) * population,
              expected_hospitalizations = expected_hospitalizations_cf *
                (1 - prevention_vax*percentage_vax),
