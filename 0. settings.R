@@ -4,7 +4,7 @@ library(here)
 library(furrr)
 
 # Under this subfolder, all relevant files will be written
-runname <- "results/14-december_15_knopen"
+runname <- "results/28-february_15_knots"
 dir.create(here(runname), showWarnings = FALSE, recursive = TRUE ) # allows all runs to be in a single subdirectory if runname consists of stacked folders
 
 startday <- as.Date("2020-09-01")
