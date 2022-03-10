@@ -23,7 +23,7 @@ lastday <- min( lastday, max(df_viralload_human_regions$Datum))
 startday <- max( startday, min(df_viralload_human_regions$Datum))
 # rm( df_viralload_human_regions ) # Needed to construct df_muni later on
 
-load_if_needed( list("df_posteriors","df_fractions"),
+load_if_needed( list("df_posteriors","df_fractions","df_sewage"),
                 here( runname, "output", "model_data", "posteriors.Rdata" ) )
 
 
@@ -31,17 +31,14 @@ load_if_needed( list("df_posteriors","df_fractions"),
 # Plot prob of detection
 ###
 df_posteriors %>%
-  ungroup() %>% 
-  group_by(rwzi) %>%
-  slice_sample( n=10 ) %>% 
-  ungroup() %>% 
-  mutate( sample=1:n() ) %>% 
+  filter(date == startday & rwzi == first(rwzi)) %>%
   expand_grid( conc=seq(11, 13, by = 0.1) ) %>%
   mutate( p_det = probdetection(conc, x0,k) ) %>% 
   ggplot( ) +
-  geom_line( aes( x = conc, y = p_det, group=sample ),
+  geom_line( aes( x = conc, y = p_det, group= .draw ),
              alpha = .01, color = cbPalette[1] ) +
-  scale_x_continuous( "Log(load)", limits = c(11, 13),
+  scale_x_continuous( expression(paste("Log(load) (10"^"-5"," persons"^"-1",")")),
+                      limits = c(11, 13),
                       expand = c(0, 0),  breaks = c(11, 11.5, 12, 12.5, 13)  ) +
   scale_y_continuous( "Prob(detection)",  limits = c(0, 1),
                       expand = c(0, 0), breaks = c(0, 0.25, 0.5, 0.75, 1)  ) +
@@ -51,38 +48,56 @@ df_posteriors %>%
     panel.grid.minor = element_blank(),
     legend.position = "none"
   )
+
 ggsave( here(runname, "figures", "model_data", "prob_detection.png"), width = 6.5, height = 4.5, units = "in")
+ggsave( here(runname, "figures", "model_data", "prob_detection.tiff"), width = 6.5, height = 4.5, units = "in")
+ggsave( here(runname, "figures", "model_data", "prob_detection.svg"), width = 6.5, height = 4.5, units = "in")
+
 
 ###
 # Plot the Netherlands
 ###
-df_posteriors %>%
-  group_by( date, .draw ) %>% 
-  summarize( weighted_concentration = weighted.mean(load,rwzi_persons ), .groups="drop" ) %>% 
+df_posteriors %>%         # group_by(..) %>% group_split is more robust than group_split(..)
+  group_by( date ) %>%    # if the tibble is already grouped then group_by overwrite those groups
+  group_split() %>%       # whereas group_split only add new groups and keeps the original groups
+  future_map(function(df){
+    left_join(df,df_sewage %>% mutate(date = as.Date(date)), by = c("date","rwzi")) %>%
+      group_by(date, .draw) %>%
+      summarize( weighted_concentration = log10(weighted.mean(10^load,rwzi_persons )), .groups="drop" )
+  }) %>%
+  bind_rows() %>%
   group_by( date ) %>% 
-  median_qi( weighted_concentration ) %>% 
-  mutate( date = as.Date( as.character( date )) ) %>% 
+  median_qi( weighted_concentration ) %>%
   ggplot( aes( x = date, y = weighted_concentration,
                ymin = .lower, ymax = .upper ) ) +
   geom_ribbon(alpha = 0.25) +
-  geom_line( color = cbPalette[1] ) +
-  ggtitle("THE NETHERLANDS") +
-  coord_cartesian(ylim = c(11, 14.5)) +
-  scale_x_date( "Date", date_breaks = "2 month", date_labels = "%m/%y") + 
-  scale_y_continuous( "Log(load)") +
+  geom_line( color = cbPalette[5] ) +
+#  labs( title = "Viral load in the Netherlands",
+#       subtitle = "1 August 2020 - 8 February  2022") +
+  coord_cartesian(ylim = c(11, 15)) +
+  scale_x_date( "Date", breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
+  scale_y_continuous( expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
   theme_bw(base_size = 20) +
   theme(
-    plot.title = element_text(color = cbPalette[1] ),
+    plot.title = element_text(color = cbPalette[5] ),
+    plot.subtitle = element_text(color = cbPalette[5] ),
     panel.grid.major = element_line(size = 0.7),
     panel.grid.minor = element_blank(),
     legend.position = "none"
   )
+
 ggsave( here( runname,"Figures", "Netherlands", "posterior.png" ), width = 6.5, height = 4.5, units = "in")
+ggsave( here( runname,"Figures", "Netherlands", "posterior.tiff" ), width = 6.5, height = 4.5, units = "in")
+ggsave( here( runname,"Figures", "Netherlands", "posterior.svg" ), width = 6.5, height = 4.5, units = "in")
 
 ###
 # Plot each RWZI, write CSV
 ###
 df_posteriors %>% 
+  left_join(df_sewage %>%
+              select(date,rwzi,concentration) %>%
+              unique() %>%
+              mutate(date = as.Date(date)), by = c("date","rwzi")) %>%
   select( date, load, concentration, rwzi ) %>%
   group_by( rwzi) %>% 
   group_split() %>%
@@ -98,16 +113,16 @@ df_posteriors %>%
   future_walk( function(x, y = x$rwzi[1]){
     p <- ggplot(x, mapping = aes(x = date,y = load,ymin = .lower, ymax=.upper) ) +
       geom_ribbon(alpha = 0.25) +
-      geom_line(color = cbPalette[6]) +
-      geom_point(aes(y = measurement), color = cbPalette[6], size = 2.5) +
-      geom_point(aes(y = zeromeasurement), color = cbPalette[6], size = 2, shape = 1) +
+      geom_line(color = cbPalette[5]) +
+      geom_point(aes(y = measurement), color = cbPalette[5], size = 2.5) +
+      geom_point(aes(y = zeromeasurement), color = cbPalette[5], size = 2, shape = 1) +
       coord_cartesian(ylim = c(11, 15)) +
-      scale_x_date("Date", date_breaks = "2 month", date_labels = "%m/%y") + #"%b"
-      scale_y_continuous("Log(load)") +
+      scale_x_date("Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + #"%b"
+      scale_y_continuous(expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
       ggtitle(y) +
       theme_bw(base_size = 20) +
       theme(
-        plot.title = element_text(color = cbPalette[6]),
+        plot.title = element_text(color = cbPalette[5]),
         panel.grid.major = element_line(size = 0.7),
         panel.grid.minor = element_blank(),
         legend.position = "none" )
@@ -121,8 +136,18 @@ df_posteriors %>%
 # largest installations are 16, 249, 252, 292
 ##
 df_posteriors %>% 
+  left_join(df_sewage %>%
+              select(date,rwzi,rwzi_persons,concentration) %>%
+              unique() %>%
+              mutate(date = as.Date(date)), by = c("date","rwzi")) %>%
+  # Filter dynamical on the largest STP instead of fixed positions
+  filter(rwzi_persons %in%
+               (df_sewage$rwzi_persons %>% 
+               unique() %>% 
+               sort(decreasing = T) %>%
+               .[1:9])) %>%
+  arrange(desc(rwzi_persons)) %>%
   select( date, load, concentration, rwzi ) %>%
-  filter( as.numeric(rwzi) %in% c(123, 16, 82, 69, 294, 267, 154, 187, 24)) %>%
   group_by(rwzi) %>%
   group_split() %>%
   future_map(function(x){
@@ -137,30 +162,31 @@ df_posteriors %>%
   future_map( function(x,y = x$rwzi[1]){
     p <- ggplot(x, mapping = aes(x = date,y = load,ymin = .lower, ymax=.upper) ) +
       geom_ribbon(alpha = 0.25) +
-      geom_line(color = cbPalette[7]) +
-      geom_point(aes(y = measurement), color = cbPalette[7], size = 2.5) +
-      geom_point(aes(y = zeromeasurement), color = cbPalette[7], size = 2, shape = 1) +
+      geom_line(color = cbPalette[5]) +
+      geom_point(aes(y = measurement), color = cbPalette[5], size = 2.5) +
+      geom_point(aes(y = zeromeasurement), color = cbPalette[5], size = 2, shape = 1) +
       coord_cartesian(ylim = c(11, 15)) +
-      scale_x_date("Date", date_breaks = "2 month", date_labels = "%m/%y") + #"%b"
-      scale_y_continuous("Log(load)") +
+      scale_x_date("Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + #"%b"
+      scale_y_continuous(expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
       ggtitle(y) +
       theme_bw(base_size = 20) +
       theme(
-        plot.title = element_text(color = cbPalette[7]),
+        plot.title = element_text(color = cbPalette[5]),
         panel.grid.major = element_line(size = 0.7),
         panel.grid.minor = element_blank(),
         legend.position = "none" )}) %>% 
   reduce( `+` ) + # Patchwork composer of plots
   plot_layout(ncol = 3)
+
 ggsave(  here( runname, "figures", "manuscript", "figure2_9plants.png"),width = 16, height = 11, units = "in")
+ggsave(  here( runname, "figures", "manuscript", "figure2_9plants.tiff"),width = 16, height = 11, units = "in")
+ggsave(  here( runname, "figures", "manuscript", "figure2_9plants.svg"),width = 16, height = 11, units = "in")
 
 
 ###
 # Compare 0,7,14 days before last date
 ###
 df_posteriors %>%
-  ungroup() %>% 
- # mutate( date = as.Date( as.character( date))) %>% 
   filter( date %in% (max(date) - c(0, 7, 14)  ) ) %>% 
   group_by( rwzi ) %>%
   group_split() %>%
@@ -176,46 +202,49 @@ df_posteriors %>%
 # Municipality level
 ###
 
-df_vaccins <- calc_vax(startday,lastday,delay_vax)
-df_muni    <- calc_df_muni( df_posteriors, df_vaccins, startday, lastday )
-
-df_muni %>%
-  group_by( municipality ) %>% 
+# First create a tibble with the load on the municipality level
+df_posteriors_municipality <- df_posteriors %>%
+  group_by(date) %>%
   group_split() %>%
-  future_walk( function(x,y = x$municipality[1]){
-    max_h <- max(x$hospitalizations, na.rm=TRUE )
-    p<- ggplot(x, mapping = aes(x = date)) +
-      geom_line(aes(y = load), color = cbPalette[7]) +
-      # TODO: put confidence bounds back in.
-      #geom_ribbon(aes(ymin = .lower, ymax = .upper ), alpha = 0.25) +
-      geom_point( aes(x = date, y = 10 + (hospitalizations*5)/max_h), color = cbPalette[7]) +
+  future_map(function(df){
+    left_join(df,df_fractions, by = "rwzi") %>%
+      mutate(load = frac_municipality2RWZI * 10^load) %>%
+      group_by(municipality,date,.draw) %>%
+      summarize(load = log10(sum(load)), .groups = "drop_last") %>%
+      median_qi(load)
+  }) %>%
+  bind_rows 
+
+df_posteriors_municipality %>%
+  group_by(municipality) %>%
+  group_split() %>%
+  future_walk(function(x, y = x$municipality[1]){
+
+    p <- ggplot(x, mapping = aes(x = date)) +
+      geom_line(aes(y = load), color = cbPalette[5]) +
+      geom_ribbon(aes(ymin = .lower, ymax = .upper ), alpha = 0.25) +
       ggtitle(y) +
-      scale_y_continuous(name = "Log(load)", sec.axis = sec_axis(~(-2*max_h +(.* max_h/5)), name = "Hospitalizations")) +
+      scale_y_continuous(name = expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
       coord_cartesian(ylim = c(11, 15)) +
-      scale_x_date( "Date", date_breaks = "2 month", date_labels = "%m/%y") + #"%b"
+      scale_x_date( "Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
       theme_bw(base_size = 20) +
       theme(
-        plot.title = element_text(color = cbPalette[7]),
+        plot.title = element_text(color = cbPalette[5]),
         panel.grid.major = element_line(size = 0.7),
         panel.grid.minor = element_blank(),
         legend.position = "none")
+    
     ggsave( here( runname, "figures", "municipality", str_c(y, ".png" )),
             plot = p, width = 6.5, height = 4.5, units = "in" )
-    write_csv(x, here( runname, "output", "municipality", str_c( y, ".csv"))) } )
+    
+    write_csv(x, here( runname, "output", "municipality", str_c( y, ".csv")))
+  })
 
 ###
 # Compare 0,7,14 days before last date, by municipality
 ###
-df_posteriors %>% 
-  select( .draw, date, load, rwzi, municipality, hospitalizations ) %>%
-  left_join( df_fractions, by = c("rwzi", "municipality") ) %>% 
-  mutate( date = as.Date( as.character( date))) %>% 
+df_posteriors_municipality %>% 
   filter( date %in% (max(date) - c(0, 7, 14)  ) ) %>% 
-  mutate( load_muni = frac_RWZI2municipality * 10^load ) %>% 
-  group_by( date, municipality, hospitalizations, .draw ) %>%
-  summarize( load = log10(sum( load_muni )), .groups="drop_last") %>% 
-  group_by( municipality, date ) %>% 
-  median_qi( load ) %>% 
   select(-.width, -.point, -.interval ) %>% 
   pivot_wider( names_from=date, values_from=c(load, .lower, .upper ) ) %>% 
   write_csv2( here( runname, "output", "output_compare_muni.csv"))
@@ -226,45 +255,55 @@ df_posteriors %>%
 # TODO: confidence bands
 ### 
 
-df_muni %>% 
-  filter( municipality %in% c("Amsterdam","Rotterdam","s-Gravenhage",
-                              "Utrecht","Eindhoven","Groningen","Tilburg","Almere","Breda" )) %>% 
+df_posteriors_municipality %>%
+  left_join(df_fractions %>%
+              group_by(municipality) %>%
+              summarize(population = first(municipality_pop) / first(frac_municipality2RWZI)),
+            by = "municipality") %>%
+  filter(population %in%
+           (df_fractions %>%
+              group_by(municipality) %>%
+              summarize(population = first(municipality_pop) / first(frac_municipality2RWZI)) %>%
+              .$population %>%
+              sort(decreasing = T) %>%
+              .[1:9])) %>%
   group_by( municipality ) %>% 
-  group_map( function(x,y){
-    max_h <- max(x$hospitalizations)
+  group_map( function(x,y = x$municipality[1]){
     p<- ggplot(x, mapping = aes(x = date)) +
-      geom_line(aes(y = load), color = cbPalette[7]) +
-      #geom_ribbon(aes(ymin = .lower, ymax = .upper ), alpha = 0.25) +
-      geom_point( aes(x = date, y = 10 + (hospitalizations*5)/max_h), color = cbPalette[7]) +
-      ggtitle(y[1,1]) +
-      scale_y_continuous(name = "Log(load)", sec.axis = sec_axis(~(-2*max_h +(.* max_h/5)), name = "Hospitalizations")) +
+      geom_line(aes(y = load), color = cbPalette[5]) +
+      geom_ribbon(aes(ymin = .lower, ymax = .upper ), alpha = 0.25) +
+      ggtitle(y) +
+      scale_y_continuous(name = expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
       coord_cartesian(ylim = c(11, 15)) +
-      scale_x_date( "Date", date_breaks = "2 month", date_labels = "%m/%y") + #"%b"
+      scale_x_date( "Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
       theme_bw(base_size = 20) +
       theme(
-        plot.title = element_text(color = cbPalette[7]),
+        plot.title = element_text(color = cbPalette[5]),
         panel.grid.major = element_line(size = 0.7),
         panel.grid.minor = element_blank(),
         legend.position = "none") }) %>% 
   reduce( `+` ) +
   plot_layout( ncol=3)
+
 ggsave(here( runname, "figures", "manuscript", "figure3_9municipalities.png" ),width = 16, height = 11,units = "in")
+ggsave(here( runname, "figures", "manuscript", "figure3_9municipalities.tiff" ),width = 16, height = 11,units = "in")
+ggsave(here( runname, "figures", "manuscript", "figure3_9municipalities.svg" ),width = 16, height = 11,units = "in")
 
 ###
 # Plots by safety region
 # TODO: the linking to VR fractions should be precalculated!
 ###
 df_posteriors %>%
-  group_by( vr ) %>%
+  group_by(date) %>%
   group_split() %>%
-  future_map(function(x){
-    group_by(x, date, vr, .draw ) %>%
-      mutate( vr_persons = sum(rwzi_persons) ) %>% 
-      summarize( load = log10( sum( rwzi_persons * 10^load ) / vr_persons ), .groups="drop_last" ) %>% 
-      median_qi( load ) %>%
-      mutate( vr=as.character(vr),
-              date=as.Date(as.character(date)))}) %>% 
-  bind_rows() %>%
+  future_map(function(df){
+    left_join(df,df_fractions, by = "rwzi") %>%
+      mutate(load = frac_VR2RWZI * 10^load) %>%
+      group_by(vr,date,.draw) %>%
+      summarize(load = log10(sum(load)), .groups = "drop_last") %>%
+      median_qi(load)
+  }) %>%
+  bind_rows %>%
   group_by( vr ) %>% 
   group_split() %>%
   future_walk( function(x,y = x$vr[1]){  
@@ -273,8 +312,8 @@ df_posteriors %>%
       geom_line(aes( x=date, y=load), color = cbPalette[5]) +
       ggtitle(y) +
       coord_cartesian(ylim = c(11, 14.5)) +
-      scale_x_date("Date",date_breaks = "2 month", date_labels = "%m/%y") + 
-      scale_y_continuous("Log(load)") +
+      scale_x_date("Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
+      scale_y_continuous(expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
       theme_bw(base_size = 20) + 
       theme(
         plot.title = element_text(color = cbPalette[5]),

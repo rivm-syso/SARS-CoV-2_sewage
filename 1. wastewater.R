@@ -26,7 +26,7 @@ lastday <- min( lastday, max(df_viralload_human_regions$Datum))
 startday <- max( startday, min(df_viralload_human_regions$Datum))
 
 df_fractions <- df_viralload_human_regions %>% 
-  select( municipality, rwzi=RWZI, municipality_pop=Inwoneraantal_municipality, starts_with( "frac" )) %>% 
+  select( municipality, rwzi=RWZI, vr = VRname, municipality_pop=Inwoneraantal_municipality, starts_with( "frac" )) %>% 
   unique() 
 
 # prepare data for Stan
@@ -43,31 +43,31 @@ datalist <- compose_data(
 
 # run Stan model
 fit <- stan(
-  "wastewater.stan",
+  here(runname,"model_code_backup","wastewater.stan"),
   model_name = "wastewater_model",
   data = datalist,
   init = initials,
   chains = n_chains,
-  iter = 100,
-  thin = 5,
+  warmup = 400,
+  iter = 800,
+  thin = 4,
   control = list(adapt_delta = 0.7, max_treedepth = 12),
   pars = c("k", "x0", "sigma_observations", "RWvar", "load" )
 )
 
 print(traceplot(fit, pars = c("k", "x0", "sigma_observations", "RWvar")))
 
-df_posteriors <- fit %>% 
+df_posteriors <- fit %>%
   recover_types( df_sewage ) %>%
   stan_split(10,c("load"),c("a_individual","load_population","log_likes_water")) %>%
-  future_map(function(x){spread_draws(x,load[date,rwzi], x0, k )}) %>% 
+  future_map(function(x){spread_draws(x,load[date,rwzi], x0, k )}) %>%
   bind_rows() %>%
-  left_join( df_sewage ) %>% # Get original data back in
-  ungroup() %>% 
+  ungroup() %>%
   mutate( date=as.Date(date) )
 
 
 save(fit, file = here( runname, "output", "model_data", "fit_pspline.RData"))
-save(df_posteriors, df_fractions, file = here( runname, "output", "model_data", "posteriors.RData"))
+save(df_posteriors, df_fractions, df_sewage, file = here( runname, "output", "model_data", "posteriors.RData"))
 
 # Removed model selection for now.
 
