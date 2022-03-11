@@ -27,14 +27,14 @@ calc_df_muni <-function(df_posteriors, df_vaccins, startday,lastday,age = 5){
     ungroup() %>% 
     select( .draw, date, load, rwzi, municipality ) %>%
     left_join(df_fractions, by = c("rwzi","municipality") ) %>% 
-    mutate( load_muni = frac_municipality2RWZI * load) %>% 
+    mutate( load_muni = frac_municipality2RWZI * 10^load) %>% 
     group_by( date, municipality, .draw ) %>%
-    summarize( load = sum( load_muni ),
+    summarize( load = log10( sum( load_muni ) ),
                .groups="drop_last") %>% 
     # Use parallel computing for speed
     group_split() %>%
     future_map(function(df){summarize(df, load_sd = sd(load), 
-                                      load = mean(load),# Median_qi can also be used
+                                      load = median(load),# Median_qi can also be used
                                       # Then we first have to group df, and then apply 
                                       # median_qi. Does make the code a bit slower.
                                       date = first(date),
