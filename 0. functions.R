@@ -168,8 +168,8 @@ initials = function() {
     sigma_observations = 0.35,
     RWvar = 0.35,
     a_population = c(11, rep(0.2, num_knots + spline_degree - 2 )),
-    a_individual = matrix(0.0, nrow = length(levels(df_sewage$rwzi)), 
-                          ncol = num_knots + spline_degree - 1)
+    a_individual = matrix(0.0, ncol = length(levels(df_sewage$rwzi)), 
+                          nrow = num_knots + spline_degree - 1)
   )
 }
 
