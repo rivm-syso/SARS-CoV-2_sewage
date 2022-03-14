@@ -214,14 +214,14 @@ stan_split <- function(fit_hospitalization,num_groups,parameters,par_ignore){
   # We find the positions of the parameters we want to extract from the model
   for(i in seq_len(length(parameters))){
     place_parameters[[i]] <- places[str_detect(fit_hospitalization@sim[["fnames_oi"]],
-                                               parameters[i])]
+                                               paste0("^",parameters[i],"(\\[|$)"))]
     place_rest <- c(place_rest,place_parameters[[i]])
   }
   
   # We find the positions of the parameters of which we want to forget most entries
   for(i in seq_len(length(par_ignore))){
     place_log_like[[i]] <- places[str_detect(fit_hospitalization@sim[["fnames_oi"]],
-                                               par_ignore[i])]
+                                               paste0("^",par_ignore[i],"(\\[|$)"))]
     place_rest <- c(place_rest,place_log_like[[i]])
   }
 
