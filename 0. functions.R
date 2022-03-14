@@ -76,8 +76,9 @@ calc_df_muni <-function(df_posteriors, df_vaccins, startday,lastday,age = 5){
 
 
 calc_vax <- function( startday,lastday,delay_vax){
-  df_vaccins <- read.csv2(vaccin_filename) %>%
-    filter(between(as.Date(Prikdatum),startday - delay_vax ,lastday)) %>%
+  df_vaccins <- read.csv2(vaccin_filename) %>% 
+    # If lastday lies before Januari 6 2021, the code doesn't work
+    filter(between(as.Date(Prikdatum),startday - delay_vax ,max(lastday,as.Date("2021-01-10")))) %>%
     select("date" = "Prikdatum",
            "municipality" = "Gemeente",
            "age_group" = "Geboortecohort",
@@ -106,7 +107,7 @@ calc_vax <- function( startday,lastday,delay_vax){
            age_group = str_replace(age_group,"^-.*?-","0-"))
   
   # Update the final day to match with the vaccin data
-  lastday <- as.Date(max(df_vaccins$date))
+  lastday <- min(as.Date(max(df_vaccins$date)),lastday)
   
   # We match each municipality and age_group with the same number of population
   # independent of the day, hence we make a help-tibble with the populations
