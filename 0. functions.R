@@ -27,14 +27,14 @@ calc_df_muni <-function(df_posteriors, df_vaccins, startday,lastday,age = 5){
     ungroup() %>% 
     select( .draw, date, load, rwzi, municipality ) %>%
     left_join(df_fractions, by = c("rwzi","municipality") ) %>% 
-    mutate( load_muni = frac_municipality2RWZI * load) %>% 
+    mutate( load_muni = frac_municipality2RWZI * 10^load) %>% 
     group_by( date, municipality, .draw ) %>%
-    summarize( load = sum( load_muni ),
+    summarize( load = log10( sum( load_muni ) ),
                .groups="drop_last") %>% 
     # Use parallel computing for speed
     group_split() %>%
     future_map(function(df){summarize(df, load_sd = sd(load), 
-                                      load = mean(load),# Median_qi can also be used
+                                      load = median(load),# Median_qi can also be used
                                       # Then we first have to group df, and then apply 
                                       # median_qi. Does make the code a bit slower.
                                       date = first(date),
@@ -76,8 +76,9 @@ calc_df_muni <-function(df_posteriors, df_vaccins, startday,lastday,age = 5){
 
 
 calc_vax <- function( startday,lastday,delay_vax){
-  df_vaccins <- read.csv2(vaccin_filename) %>%
-    filter(between(as.Date(Prikdatum),startday - delay_vax ,lastday)) %>%
+  df_vaccins <- read.csv2(vaccin_filename) %>% 
+    # If lastday lies before Januari 6 2021, the code doesn't work
+    filter(between(as.Date(Prikdatum),startday - delay_vax ,max(lastday,as.Date("2021-01-10")))) %>%
     select("date" = "Prikdatum",
            "municipality" = "Gemeente",
            "age_group" = "Geboortecohort",
@@ -106,7 +107,7 @@ calc_vax <- function( startday,lastday,delay_vax){
            age_group = str_replace(age_group,"^-.*?-","0-"))
   
   # Update the final day to match with the vaccin data
-  lastday <- as.Date(max(df_vaccins$date))
+  lastday <- min(as.Date(max(df_vaccins$date)),lastday)
   
   # We match each municipality and age_group with the same number of population
   # independent of the day, hence we make a help-tibble with the populations
@@ -168,8 +169,8 @@ initials = function() {
     sigma_observations = 0.35,
     RWvar = 0.35,
     a_population = c(11, rep(0.2, num_knots + spline_degree - 2 )),
-    a_individual = matrix(0.0, nrow = length(levels(df_sewage$rwzi)), 
-                          ncol = num_knots + spline_degree - 1)
+    a_individual = matrix(0.0, ncol = length(levels(df_sewage$rwzi)), 
+                          nrow = num_knots + spline_degree - 1)
   )
 }
 
@@ -213,14 +214,14 @@ stan_split <- function(fit_hospitalization,num_groups,parameters,par_ignore){
   # We find the positions of the parameters we want to extract from the model
   for(i in seq_len(length(parameters))){
     place_parameters[[i]] <- places[str_detect(fit_hospitalization@sim[["fnames_oi"]],
-                                               parameters[i])]
+                                               paste0("^",parameters[i],"(\\[|$)"))]
     place_rest <- c(place_rest,place_parameters[[i]])
   }
   
   # We find the positions of the parameters of which we want to forget most entries
   for(i in seq_len(length(par_ignore))){
     place_log_like[[i]] <- places[str_detect(fit_hospitalization@sim[["fnames_oi"]],
-                                               par_ignore[i])]
+                                               paste0("^",par_ignore[i],"(\\[|$)"))]
     place_rest <- c(place_rest,place_log_like[[i]])
   }
 
