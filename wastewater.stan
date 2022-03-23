@@ -172,12 +172,12 @@ model {
   target += watanabe_beta * sum(log_likes_water);  
 }
 
-generated quantities {
- // real simulated_measurements[n_date, n_rwzi];   // prediction intervals 
-  //real weighted_concentration[n_date];           // posterior weighted population concentration 
-  real log_lik;                                  // posterior log-likelihood; WBIC sampling when mode = 1
-  
-  /* yields estimate of WBIC when mode = 1 */
-  log_lik = sum(log_likes_water);
-
- } 
+// generated quantities {
+//  // real simulated_measurements[n_date, n_rwzi];   // prediction intervals 
+//   //real weighted_concentration[n_date];           // posterior weighted population concentration 
+//   real log_lik;                                  // posterior log-likelihood; WBIC sampling when mode = 1
+//   
+//   /* yields estimate of WBIC when mode = 1 */
+//   log_lik = sum(log_likes_water);
+// 
+//  } 

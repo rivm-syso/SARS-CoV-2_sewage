@@ -4,11 +4,11 @@ library(here)
 library(furrr)
 
 # Under this subfolder, all relevant files will be written
-runname <- "results/28-february_15_knots"
+runname <- "results/paper_augustus_2020_february_2022_15_knots"
 dir.create(here(runname), showWarnings = FALSE, recursive = TRUE ) # allows all runs to be in a single subdirectory if runname consists of stacked folders
 
-startday <- as.Date("2021-01-01")  
-lastday  <- as.Date("2022-01-01")
+startday <- as.Date("2020-08-01")
+lastday  <- as.Date("2022-02-08")
 
 # We need the most recent, i.e. the highest date, file. Which means that alphabetically 
 # it is the last file 
