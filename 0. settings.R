@@ -50,9 +50,9 @@ if(!file.exists(here(runname,"output", "model_data","df_viralload_human_regions.
 viralload_filename <- here(runname,"output", "model_data","df_viralload_human_regions.RData")
 
 # Settings for wastewater-model
-num_knots     <- 15
+num_knots     <- 12
 spline_degree <- 3
-n_chains      <- 10
+n_chains      <- 4
 
 # Settings for hospitalizations-model
 max_delay     <- 0

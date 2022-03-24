@@ -105,25 +105,24 @@ transformed data {
 
 parameters {
   /* splines for wastewater intensities */
-  matrix [n_rwzi, num_basis] a_individual;  // a_individual[i] is row weights vector for i-th installation 
-  vector [num_basis] a_population;          // a_population[i] is row weights vector for i-th population
+  matrix [num_basis, n_rwzi] a_individual;  // a_individual[,i] is weights vector for i-th installation 
+  vector [num_basis]         a_population;  // a_population is row weights vector
     
   /* parameters of detection function */
-  real <lower = 0> x0;                                                // x0 of logistic function determining p(positive) 
-  real <lower = 2> k;                                                 // k of logistic function determining p(positive) 
+  real <lower = 0> x0;                      // x0 of logistic function determining p(positive) 
+  real <lower = 2> k;                       // k of logistic function determining p(positive) 
   
   /* sd/var of observations */ 
-  real<lower = 0> sigma_observations;                                 // one sigma/var for all sewage plants
+  real<lower = 0> sigma_observations;       // one sigma/var for all sewage plants
 
   /* variance of RW1/2 parameter of population load */
-  real<lower = 0> RWvar;                                              // see Lang & Brezger (2004)
+  real<lower = 0> RWvar;                    // see Lang & Brezger (2004)
 }
 
 transformed parameters { 
-  matrix<lower=0> [n_date, n_rwzi] load;         // estimated loads per sewage plant
-  vector<lower=0> [n_date] load_population;    // estimated regional loads (e.g., province, safety region)
-  matrix [n_date, n_rwzi]  log_likes_water;       // log-likelihood contributions of sewage data
-  vector [num_basis] weights;                        // regression coefficients for the population spline 
+  matrix<lower=0> [n_date, n_rwzi] load;    // estimated loads per sewage plant
+  matrix [n_date, n_rwzi]  log_likes_water; // log-likelihood contributions of sewage data
+  vector [num_basis] weights;               // regression coefficients for the population spline 
       
   
   // P-spline for population level load
@@ -132,24 +131,20 @@ transformed parameters {
       weights[i] = weights[i-1] + a_population[i];  
     }
 
-  /* estimated population load */
-  load_population = B' * weights;                           // notice vectorisation
-  
-  /* estimated loads at the plant level */
-  /*  = population load + deviation     */
-  for ( i in 1 : n_rwzi ) {               
-	  load[,i] = load_population + to_vector(a_individual[i]*B);   // vectorise!  
-  }
+  /* estimated loads at the plant level 
+      = population load + deviation     */
+  load = B' * (rep_matrix( weights, n_rwzi ) + a_individual);
   
   /* likelihood contributions */
   for ( i in 1 : n_rwzi ) { 
     for ( t in 1 : n_date ) {
 	  log_likes_water[t, i] = 0;  // for easy summation                                    
 	  if (wastewater[t,i] > -0.5) { // if -1 then no measurement
-        if (wastewater[t, i] < 1.0) // if 0 then no RNA detected; TODO: use bernoulli_logit_lpmf 
-	      log_likes_water[t,i] = bernoulli_lpmf(0 | inv_logit(k * (load[t, i] - x0))); 
+      real alpha = k * (load[t, i] - x0);
+      if (wastewater[t, i] < 1.0) // if 0 then no RNA detected
+	      log_likes_water[t,i] = bernoulli_logit_lpmf(0 | alpha ); 
 	    else 
-		    log_likes_water[t,i] = bernoulli_lpmf(1 | inv_logit(k * (load[t, i] - x0))) + normal_lpdf(wastewater[t,i] | load[t, i], sigma_observations);  //[i]
+		    log_likes_water[t,i] = bernoulli_logit_lpmf(1 | alpha ) + normal_lpdf(wastewater[t,i] | load[t, i], sigma_observations);
       }	
 	  } 
   }
@@ -167,7 +162,7 @@ model {
   
   /* sewage plant specific priors */
   for (s in 1:num_basis) {
-	 a_individual[,s] ~ normal(0, 1);
+	 a_individual[s] ~ normal(0, 1);
   }
 
   /* priors for logistic detection function */
