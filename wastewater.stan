@@ -121,32 +121,33 @@ parameters {
 
 transformed parameters { 
   matrix<lower=0> [n_date, n_rwzi] load;    // estimated loads per sewage plant
-  matrix [n_date, n_rwzi]  log_likes_water; // log-likelihood contributions of sewage data
+  matrix [n_date, n_rwzi] log_likes_water;  // log-likelihood contributions of sewage data
   vector [num_basis] weights;               // regression coefficients for the population spline 
       
   
   // P-spline for population level load
   weights[1] = a_population[1];
-  for (i in 2 : num_basis) {				                        // RW1 smoothing prior (Lang & Brezger, 2004) 
-      weights[i] = weights[i-1] + a_population[i];  
-    }
+  for (i in 2 : num_basis) {				        // RW1 smoothing prior (Lang & Brezger, 2004) 
+    weights[i] = weights[i-1] + a_population[i];  
+  }
 
   /* estimated loads at the plant level 
       = population load + deviation     */
   load = B' * (rep_matrix( weights, n_rwzi ) + a_individual);
   
+  log_likes_water = rep_matrix(0, n_date, n_rwzi );
+  
   /* likelihood contributions */
   for ( i in 1 : n_rwzi ) { 
     for ( t in 1 : n_date ) {
-	  log_likes_water[t, i] = 0;  // for easy summation                                    
-	  if (wastewater[t,i] > -0.5) { // if -1 then no measurement
-      real alpha = k * (load[t, i] - x0);
-      if (wastewater[t, i] < 1.0) // if 0 then no RNA detected
-	      log_likes_water[t,i] = bernoulli_logit_lpmf(0 | alpha ); 
-	    else 
-		    log_likes_water[t,i] = bernoulli_logit_lpmf(1 | alpha ) + normal_lpdf(wastewater[t,i] | load[t, i], sigma_observations);
+	    if (wastewater[t,i] > -0.5) { // if -1 then no measurement
+        real alpha = k * (load[t, i] - x0);
+        if (wastewater[t, i] < 1.0) // if 0 then no RNA detected
+	        log_likes_water[t,i] = bernoulli_logit_lpmf(0 | alpha ); 
+	      else 
+		      log_likes_water[t,i] = bernoulli_logit_lpmf(1 | alpha ) + normal_lpdf(wastewater[t,i] | load[t, i], sigma_observations);
       }	
-	  } 
+    } 
   }
 }
 
