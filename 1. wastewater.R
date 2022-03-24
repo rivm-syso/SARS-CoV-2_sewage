@@ -4,6 +4,7 @@ library(rstan)
 library(loo)
 library(tidybayes)
 library(furrr)
+library(knitr) # For writing parameters to html file
 
 setwd( here() )
 if(!exists("functions_sourced")){
@@ -52,14 +53,21 @@ fit <- stan(
   iter = 800,
   thin = 4,
   control = list(adapt_delta = 0.7, max_treedepth = 12),
-  pars = c("k", "x0", "sigma_observations", "RWvar", "load" )
+  pars = c("k", "x0", "sigma_observations", "RWvar", "load", "a_population" )
 )
 
 print(traceplot(fit, pars = c("k", "x0", "sigma_observations", "RWvar")))
 
+summary( fit, pars = c("k", "x0", "sigma_observations", "RWvar", "a_population") ) %>% 
+  pluck( "summary" ) %>%
+  as_tibble( rownames = "parameter" ) %>% 
+  select( parameter, mean, `2.5%`, `97.5%`, n_eff, Rhat ) %>% 
+  kable( format="html", digits = 3 ) %>% 
+  cat( file = here( runname, "output", "model_data", "parameters.html") )
+
 df_posteriors <- fit %>%
   recover_types( df_sewage ) %>%
-  stan_split(10,c("load"),c("a_individual","load_population","log_likes_water")) %>%
+  stan_split(10,c("a_individual","load"),c("load_population","log_likes_water")) %>%
   future_map(function(x){spread_draws(x,load[date,rwzi], x0, k )}) %>%
   bind_rows() %>%
   ungroup() %>%
