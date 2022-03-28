@@ -195,7 +195,8 @@ probdetection = function(x, x0, k) {
 }
 
 # Split the model fit for future map
-stan_split <- function(fit_hospitalization,num_groups,parameters,par_ignore){
+stan_split <- function(fit_hospitalization,num_groups,parameters,par_ignore,
+                            startday,lastday){
   # We split the fit of the model, fit_hospitalizations in multiple groups along
   # the second dimension of the parameters of interest.
   # num_groups is the number of groups we create
@@ -230,7 +231,7 @@ stan_split <- function(fit_hospitalization,num_groups,parameters,par_ignore){
   
   # We divide the results in (almost) equally sized lists
   n_chains <- fit_hospitalization@sim[["chains"]]
-  n_days <- fit_hospitalization@par_dims[[parameters[1]]][[1]]
+  n_days <- as.numeric(lastday - startday) + 1
   n_muni <- floor(fit_hospitalization@par_dims[[parameters[1]]][[2]]/num_groups)
   muni_extra <- 0
   
