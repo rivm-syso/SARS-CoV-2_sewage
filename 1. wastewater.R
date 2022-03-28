@@ -44,7 +44,7 @@ datalist <- compose_data(
 
 # run Stan model
 fit <- stan(
-  here(runname,"model_code_backup","wastewater.stan"),
+  "wastewater.stan",
   model_name = "wastewater_model",
   data = datalist,
   init = initials,
