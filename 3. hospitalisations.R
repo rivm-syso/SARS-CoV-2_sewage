@@ -35,7 +35,7 @@ startday <- max( startday, min(df_posteriors$date), min(df_vaccins$date), min(df
 
 # Calculate median load per municipality from posterior
 #  also sums up the population in municipalities
-df_muni <- calc_df_muni(df_posteriors, df_vaccins, startday,lastday, 20 )
+df_muni <- calc_df_muni(df_posteriors, df_fractions, df_vaccins, startday,lastday, 20 )
 
 rm( df_posteriors )
 

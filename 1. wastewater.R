@@ -67,7 +67,7 @@ summary( fit, pars = c("k", "x0", "sigma_observations", "RWvar", "a_population")
 
 df_posteriors <- fit %>%
   recover_types( df_sewage ) %>%
-  stan_split(10,c("a_individual","load"),c("load_population","log_likes_water")) %>%
+  stan_split(10,c("a_individual","load"),c("load_population","log_likes_water"),startday,lastday) %>%
   future_map(function(x){spread_draws(x,load[date,rwzi], x0, k )}) %>%
   bind_rows() %>%
   ungroup() %>%

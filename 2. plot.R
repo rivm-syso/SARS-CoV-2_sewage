@@ -203,17 +203,7 @@ df_posteriors %>%
 ###
 
 # First create a tibble with the load on the municipality level
-df_posteriors_municipality <- df_posteriors %>%
-  group_by(date) %>%
-  group_split() %>%
-  future_map(function(df){
-    left_join(df,df_fractions, by = "rwzi") %>%
-      mutate(load = frac_municipality2RWZI * 10^load) %>%
-      group_by(municipality,date,.draw) %>%
-      summarize(load = log10(sum(load)), .groups = "drop_last") %>%
-      median_qi(load)
-  }) %>%
-  bind_rows 
+df_posteriors_municipality <- calc_df_load_municipality(df_posteriors,df_fractions)
 
 df_posteriors_municipality %>%
   group_by(municipality) %>%
