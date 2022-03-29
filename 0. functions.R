@@ -56,7 +56,6 @@ calc_df_muni <-function(df_posteriors, df_fractions, df_vaccins, startday,lastda
   df_muni <- df_muni %>%
     group_by(date,municipality,age_group) %>%
     summarize(load = first(load),
-              load_sd = first(load_sd),
               percentage_vax = sum(percentage_vax*population)/sum(population),
               hospitalizations = sum(hospitalizations), 
               population = sum(population),
