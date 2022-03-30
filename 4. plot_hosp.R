@@ -11,8 +11,8 @@ if(!exists("settings_sourced")){
   source( "0. settings.R" )
 }
 
-load_if_needed( "df_posteriors_hosp", here( runname, "output", "model_data", "posteriors_hosp_age.RData") )
-load_if_needed( "^df_muni", here( runname, "output", "model_data", "df_muni_age.RData")) # Note ^ in regular expression to avoid finding "calc_df_muni"
+load_if_needed( "df_posteriors_hosp", here( runname, "output", "model_data", "posteriors_hosp.RData") )
+load_if_needed( "^df_muni", here( runname, "output", "model_data", "df_muni.RData")) # Note ^ in regular expression to avoid finding "calc_df_muni"
 
 df_plot_hosp <- df_muni %>% 
   group_by(municipality) %>% 
