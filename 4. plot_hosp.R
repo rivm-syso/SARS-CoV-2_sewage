@@ -110,3 +110,7 @@ df_plot_hosp %>% future_map(function(x){
   
   write_csv(x, here( runname, "output", "Leeftijd", str_c("cf_hosp_",x$municipality[1], ".csv")))
 })
+
+# Clean up the enviroment by removing objects we no longer need
+rm(df_muni,df_posteriors_hosp,df_plot_hosp)
+invisible(gc()) # Just to be sure

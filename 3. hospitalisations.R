@@ -37,11 +37,12 @@ startday <- max( startday, min(df_posteriors$date), min(df_vaccins$date), min(df
 #  also sums up the population in municipalities
 df_muni <- calc_df_muni(df_posteriors, df_fractions, df_vaccins, startday,lastday, 20 )
 
-rm( df_posteriors )
-
 # Save calculated data frames per age group
-# save(df_vaccins,file = here( runname, "output", "model_data", "df_vaccins_age.RData"))
 save(df_muni,file = here( runname, "output", "model_data", "df_muni_age.RData"))
+
+# Clean up the enviroment by removing objects we no longer need
+rm(df_viralload_human_regions,df_fractions,df_posteriors,df_vaccins)
+invisible(gc()) # Just to be sure as df_posteriors can be rather large
 
 # run Stan model
 fit_hospitalization = stan(
@@ -81,3 +82,6 @@ df_posteriors_hosp <- fit_hospitalization %>%
 save(fit_hospitalization, file = here( runname, "output", "model_data", "fit_hosp_age.RData"))
 save(df_posteriors_hosp, df_fractions, file = here( runname, "output", "model_data", "posteriors_hosp_age.RData"))
 
+# Clean up the enviroment by removing objects we no longer need
+rm(fit_hospitalization)
+invisible(gc()) # Just to be sure

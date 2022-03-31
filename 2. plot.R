@@ -314,3 +314,7 @@ df_posteriors %>%
     ggsave( here( runname, "figures", "safetyregion", str_c(y, ".png" )),
             plot = p, width = 6.5, height = 4.5, units = "in" )
     write_csv(x, here(runname, "output", "safetyregion", str_c(y,".csv")))})
+
+# Clean up the enviroment by removing objects we no longer need
+rm(df_sewage,df_posteriors_municipality)
+invisible(gc()) # Just to be sure

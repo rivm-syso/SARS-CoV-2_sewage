@@ -77,6 +77,10 @@ df_posteriors <- fit %>%
 save(fit, file = here( runname, "output", "model_data", "fit_pspline.RData"))
 save(df_posteriors, df_fractions, df_sewage, file = here( runname, "output", "model_data", "posteriors.RData"))
 
+# Clean up the enviroment by removing objects we no longer need
+rm(datalist,fit)
+invisible(gc()) # Just to be sure as fit can be rather large
+
 # Removed model selection for now.
 
 # model selection based on expected predictive performance
