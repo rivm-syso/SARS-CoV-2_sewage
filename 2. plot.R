@@ -1,9 +1,3 @@
-#### TODO: Keep an eye on the memory use of df_posteriors, and when needed
-####       don't create df_posteriors, but compute median(qi) load in parallel
-####       for each rwzi seperate and combine them later
-####
-####       Willen we de figuren met ziekenhuisopnames e.d. hier behouden? 177 e.v.
-
 library( tidyverse )
 library( tidybayes )
 library( patchwork )
@@ -36,13 +30,13 @@ df_posteriors %>%
   mutate( p_det = probdetection(conc, x0,k) ) %>% 
   ggplot( ) +
   geom_line( aes( x = conc, y = p_det, group= .draw ),
-             alpha = .01, color = cbPalette[1] ) +
+             alpha = .01, color = cbPalette[5] ) +
   scale_x_continuous( expression(paste("Log(load) (10"^"-5"," persons"^"-1",")")),
                       limits = c(11, 13),
                       expand = c(0, 0),  breaks = c(11, 11.5, 12, 12.5, 13)  ) +
   scale_y_continuous( "Prob(detection)",  limits = c(0, 1),
                       expand = c(0, 0), breaks = c(0, 0.25, 0.5, 0.75, 1)  ) +
-  theme_bw(base_size = 20) +
+  theme_bw(base_size = 15) +
   theme(
     panel.grid.major = element_line(size = 0.7),
     panel.grid.minor = element_blank(),
@@ -55,7 +49,7 @@ ggsave( here(runname, "figures", "model_data", "prob_detection.svg"), width = 6.
 
 
 ###
-# Plot the Netherlands
+# Plot the Netherlands and write CSV
 ###
 df_posteriors %>%         # group_by(..) %>% group_split is more robust than group_split(..)
   group_by( date ) %>%    # if the tibble is already grouped then group_by overwrite those groups
@@ -67,7 +61,8 @@ df_posteriors %>%         # group_by(..) %>% group_split is more robust than gro
   }) %>%
   bind_rows() %>%
   group_by( date ) %>% 
-  median_qi( weighted_concentration ) %>%
+  median_qi( weighted_concentration ) %T>%
+  write.csv(here(runname,"output","Netherlands","posterior.csv")) %>%
   ggplot( aes( x = date, y = weighted_concentration,
                ymin = .lower, ymax = .upper ) ) +
   geom_ribbon(alpha = 0.25) +
@@ -77,7 +72,7 @@ df_posteriors %>%         # group_by(..) %>% group_split is more robust than gro
   coord_cartesian(ylim = c(11, 15)) +
   scale_x_date( "Date", breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
   scale_y_continuous( expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
-  theme_bw(base_size = 20) +
+  theme_bw(base_size = 15) +
   theme(
     plot.title = element_text(color = cbPalette[5] ),
     plot.subtitle = element_text(color = cbPalette[5] ),
@@ -112,15 +107,15 @@ df_posteriors %>%
   group_split() %>%
   future_walk( function(x, y = x$rwzi[1]){
     p <- ggplot(x, mapping = aes(x = date,y = load,ymin = .lower, ymax=.upper) ) +
+      geom_point(aes(y = measurement), color = cbPalette[5], size = 2.5, alpha = .5) +
+      geom_point(aes(y = zeromeasurement), color = cbPalette[5], size = 2, shape = 1, alpha = .5) +
       geom_ribbon(alpha = 0.25) +
       geom_line(color = cbPalette[5]) +
-      geom_point(aes(y = measurement), color = cbPalette[5], size = 2.5) +
-      geom_point(aes(y = zeromeasurement), color = cbPalette[5], size = 2, shape = 1) +
       coord_cartesian(ylim = c(11, 15)) +
       scale_x_date("Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + #"%b"
       scale_y_continuous(expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
       ggtitle(y) +
-      theme_bw(base_size = 20) +
+      theme_bw(base_size = 10) +
       theme(
         plot.title = element_text(color = cbPalette[5]),
         panel.grid.major = element_line(size = 0.7),
@@ -155,28 +150,27 @@ df_posteriors %>%
     median_qi( load ) %>%
     mutate( zeromeasurement = ifelse(measurement == 0, load, -2),
             date=as.Date(as.character(date)),
-            rwzi=as.character(rwzi))}) %>% 
-  bind_rows() %>%
-  group_by( rwzi ) %>% 
-  group_split() %>%
-  future_map( function(x,y = x$rwzi[1]){
-    p <- ggplot(x, mapping = aes(x = date,y = load,ymin = .lower, ymax=.upper) ) +
-      geom_ribbon(alpha = 0.25) +
-      geom_line(color = cbPalette[5]) +
-      geom_point(aes(y = measurement), color = cbPalette[5], size = 2.5) +
-      geom_point(aes(y = zeromeasurement), color = cbPalette[5], size = 2, shape = 1) +
-      coord_cartesian(ylim = c(11, 15)) +
-      scale_x_date("Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + #"%b"
-      scale_y_continuous(expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
-      ggtitle(y) +
-      theme_bw(base_size = 20) +
-      theme(
-        plot.title = element_text(color = cbPalette[5]),
-        panel.grid.major = element_line(size = 0.7),
-        panel.grid.minor = element_blank(),
-        legend.position = "none" )}) %>% 
-  reduce( `+` ) + # Patchwork composer of plots
-  plot_layout(ncol = 3)
+            rwzi=as.character(rwzi))})  %>%
+  bind_rows() %T>%
+  write.csv(here(runname,"output","manuscript","rwzi.csv")) %>%
+  ggplot(mapping = aes(x = date,y = load,ymin = .lower, ymax=.upper) ) +
+    geom_point(aes(y = measurement), color = cbPalette[5], size = 1, alpha = .5) +
+    geom_point(aes(y = zeromeasurement), color = cbPalette[5], size = 1, shape = .5) +
+    geom_ribbon(alpha = 0.25) +
+    geom_line(color = cbPalette[5]) +
+    coord_cartesian(ylim = c(11, 15)) +
+    scale_x_date("Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + #"%b"
+    scale_y_continuous(expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
+    theme_bw(base_size = 20) +
+    theme(
+      plot.title = element_text(color = cbPalette[5]),
+      panel.grid.major = element_line(size = 0.7),
+      panel.grid.minor = element_blank(),
+      legend.position = "none" ) +
+    facet_wrap(vars(rwzi), ncol = 3) +
+    theme(strip.background = element_blank(),
+          strip.text = element_text(color = cbPalette[5],size = 30),
+          axis.title = element_text(size = 30))
 
 ggsave(  here( runname, "figures", "manuscript", "figure2_9plants.png"),width = 16, height = 11, units = "in")
 ggsave(  here( runname, "figures", "manuscript", "figure2_9plants.tiff"),width = 16, height = 11, units = "in")
@@ -213,11 +207,11 @@ df_posteriors_municipality %>%
     p <- ggplot(x, mapping = aes(x = date)) +
       geom_line(aes(y = load), color = cbPalette[5]) +
       geom_ribbon(aes(ymin = .lower, ymax = .upper ), alpha = 0.25) +
-      ggtitle(y) +
-      scale_y_continuous(name = expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
+      ggtitle(y) +     
       coord_cartesian(ylim = c(11, 15)) +
       scale_x_date( "Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
-      theme_bw(base_size = 20) +
+      scale_y_continuous(name = expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
+      theme_bw(base_size = 10) +
       theme(
         plot.title = element_text(color = cbPalette[5]),
         panel.grid.major = element_line(size = 0.7),
@@ -242,7 +236,6 @@ df_posteriors_municipality %>%
 ###
 # make figure for manuscript
 # largest municipalities are 16, 249, 252, 292
-# TODO: confidence bands
 ### 
 
 df_posteriors_municipality %>%
@@ -256,24 +249,24 @@ df_posteriors_municipality %>%
               summarize(population = first(municipality_pop) / first(frac_municipality2RWZI)) %>%
               .$population %>%
               sort(decreasing = T) %>%
-              .[1:9])) %>%
-  group_by( municipality ) %>% 
-  group_map( function(x,y = x$municipality[1]){
-    p<- ggplot(x, mapping = aes(x = date)) +
-      geom_line(aes(y = load), color = cbPalette[5]) +
-      geom_ribbon(aes(ymin = .lower, ymax = .upper ), alpha = 0.25) +
-      ggtitle(y) +
-      scale_y_continuous(name = expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
-      coord_cartesian(ylim = c(11, 15)) +
-      scale_x_date( "Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
-      theme_bw(base_size = 20) +
-      theme(
+              .[1:9])) %T>%
+  write.csv(here(runname,"output","manuscript","municipalities.csv")) %>%
+  ggplot(mapping = aes(x = date, y = load, ymin = .lower, ymax = .upper)) +
+  geom_line(color = cbPalette[5]) +
+  geom_ribbon(alpha = 0.25) +
+  coord_cartesian(ylim = c(11, 15)) +
+  scale_x_date( "Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
+  scale_y_continuous(name = expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
+  theme_bw(base_size = 20) +
+  theme(
         plot.title = element_text(color = cbPalette[5]),
         panel.grid.major = element_line(size = 0.7),
         panel.grid.minor = element_blank(),
-        legend.position = "none") }) %>% 
-  reduce( `+` ) +
-  plot_layout( ncol=3)
+        legend.position = "none") +
+  facet_wrap(vars(municipality), ncol = 3) +
+  theme(strip.background = element_blank(),
+        strip.text = element_text(color = cbPalette[5],size = 30),
+        axis.title = element_text(size = 30))
 
 ggsave(here( runname, "figures", "manuscript", "figure3_9municipalities.png" ),width = 16, height = 11,units = "in")
 ggsave(here( runname, "figures", "manuscript", "figure3_9municipalities.tiff" ),width = 16, height = 11,units = "in")
@@ -281,7 +274,6 @@ ggsave(here( runname, "figures", "manuscript", "figure3_9municipalities.svg" ),w
 
 ###
 # Plots by safety region
-# TODO: the linking to VR fractions should be precalculated!
 ###
 df_posteriors %>%
   group_by(date) %>%
@@ -304,7 +296,7 @@ df_posteriors %>%
       coord_cartesian(ylim = c(11, 14.5)) +
       scale_x_date("Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
       scale_y_continuous(expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
-      theme_bw(base_size = 20) + 
+      theme_bw(base_size = 10) + 
       theme(
         plot.title = element_text(color = cbPalette[5]),
         panel.grid.major = element_line(size = 0.7),
