@@ -3,6 +3,7 @@ library( tidybayes )
 library( patchwork )
 library( here )
 library( furrr )
+library( stringr )
 
 if(!exists("functions_sourced")){
   source( "0. functions.R" )
@@ -31,7 +32,7 @@ df_posteriors %>%
   ggplot( ) +
   geom_line( aes( x = conc, y = p_det, group= .draw ),
              alpha = .01, color = cbPalette[5] ) +
-  scale_x_continuous( expression(paste("Log(load) (10"^"-5"," persons"^"-1",")")),
+  scale_x_continuous( expression(paste("Log"[10],"(load) (10"^"-5"," persons"^"-1",")")),
                       limits = c(11, 13),
                       expand = c(0, 0),  breaks = c(11, 11.5, 12, 12.5, 13)  ) +
   scale_y_continuous( "Prob(detection)",  limits = c(0, 1),
@@ -71,7 +72,7 @@ df_posteriors %>%         # group_by(..) %>% group_split is more robust than gro
 #       subtitle = "1 August 2020 - 8 February  2022") +
   coord_cartesian(ylim = c(11, 15)) +
   scale_x_date( "Date", breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
-  scale_y_continuous( expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
+  scale_y_continuous( expression(paste("Log"[10],"(load) (10"^"-5"," persons"^"-1",")")) ) +
   theme_bw(base_size = 15) +
   theme(
     plot.title = element_text(color = cbPalette[5] ),
@@ -113,7 +114,7 @@ df_posteriors %>%
       geom_line(color = cbPalette[5]) +
       coord_cartesian(ylim = c(11, 15)) +
       scale_x_date("Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + #"%b"
-      scale_y_continuous(expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
+      scale_y_continuous( expression(paste("Log"[10],"(load) (10"^"-5"," persons"^"-1",")")) ) +
       ggtitle(y) +
       theme_bw(base_size = 10) +
       theme(
@@ -149,8 +150,8 @@ df_posteriors %>%
     group_by(x, date, rwzi, measurement=concentration ) %>% 
     median_qi( load ) %>%
     mutate( zeromeasurement = ifelse(measurement == 0, load, -2),
-            date=as.Date(as.character(date)),
-            rwzi=as.character(rwzi))})  %>%
+            date= as.Date(as.character(date)),
+            rwzi= str_to_title(as.character(rwzi))) })  %>%
   bind_rows() %T>%
   write.csv(here(runname,"output","manuscript","rwzi.csv")) %>%
   ggplot(mapping = aes(x = date,y = load,ymin = .lower, ymax=.upper) ) +
@@ -160,7 +161,7 @@ df_posteriors %>%
     geom_line(color = cbPalette[5]) +
     coord_cartesian(ylim = c(11, 15)) +
     scale_x_date("Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + #"%b"
-    scale_y_continuous(expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
+    scale_y_continuous( expression(paste("Log"[10],"(load) (10"^"-5"," persons"^"-1",")")) ) +
     theme_bw(base_size = 20) +
     theme(
       plot.title = element_text(color = cbPalette[5]),
@@ -196,10 +197,7 @@ df_posteriors %>%
 # Municipality level
 ###
 
-# First create a tibble with the load on the municipality level
-df_posteriors_municipality <- calc_df_load_municipality(df_posteriors,df_fractions)
-
-df_posteriors_municipality %>%
+calc_df_load_municipality(df_posteriors,df_fractions) %>%
   group_by(municipality) %>%
   group_split() %>%
   future_walk(function(x, y = x$municipality[1]){
@@ -210,7 +208,7 @@ df_posteriors_municipality %>%
       ggtitle(y) +     
       coord_cartesian(ylim = c(11, 15)) +
       scale_x_date( "Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
-      scale_y_continuous(name = expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
+      scale_y_continuous(name = expression(paste("Log"[10],"(load) (10"^"-5"," persons"^"-1",")")) ) +
       theme_bw(base_size = 10) +
       theme(
         plot.title = element_text(color = cbPalette[5]),
@@ -227,7 +225,7 @@ df_posteriors_municipality %>%
 ###
 # Compare 0,7,14 days before last date, by municipality
 ###
-df_posteriors_municipality %>% 
+calc_df_load_municipality(df_posteriors,df_fractions) %>% 
   filter( date %in% (max(date) - c(0, 7, 14)  ) ) %>% 
   select(-.width, -.point, -.interval ) %>% 
   pivot_wider( names_from=date, values_from=c(load, .lower, .upper ) ) %>% 
@@ -238,7 +236,7 @@ df_posteriors_municipality %>%
 # largest municipalities are 16, 249, 252, 292
 ### 
 
-df_posteriors_municipality %>%
+calc_df_load_municipality(df_posteriors,df_fractions) %>%
   left_join(df_fractions %>%
               group_by(municipality) %>%
               summarize(population = first(municipality_pop) / first(frac_municipality2RWZI)),
@@ -256,7 +254,7 @@ df_posteriors_municipality %>%
   geom_ribbon(alpha = 0.25) +
   coord_cartesian(ylim = c(11, 15)) +
   scale_x_date( "Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
-  scale_y_continuous(name = expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
+  scale_y_continuous(name = expression(paste("Log"[10],"(load) (10"^"-5"," persons"^"-1",")")) ) +
   theme_bw(base_size = 20) +
   theme(
         plot.title = element_text(color = cbPalette[5]),
@@ -295,7 +293,7 @@ df_posteriors %>%
       ggtitle(y) +
       coord_cartesian(ylim = c(11, 14.5)) +
       scale_x_date("Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
-      scale_y_continuous(expression(paste("Log(load) (10"^"-5"," persons"^"-1",")"))) +
+      scale_y_continuous( expression(paste("Log"[10],"(load) (10"^"-5"," persons"^"-1",")")) ) +
       theme_bw(base_size = 10) + 
       theme(
         plot.title = element_text(color = cbPalette[5]),
@@ -308,5 +306,5 @@ df_posteriors %>%
     write_csv(x, here(runname, "output", "safetyregion", str_c(y,".csv")))})
 
 # Clean up the enviroment by removing objects we no longer need
-rm(df_sewage,df_posteriors_municipality)
+rm(df_sewage)
 invisible(gc()) # Just to be sure
