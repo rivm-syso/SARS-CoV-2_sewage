@@ -23,122 +23,10 @@ calc_df_load_municipality <- function(df_posteriors,df_fractions){
     bind_rows()
 }
 
-calc_df_muni <-function(df_posteriors, df_fractions, df_vaccins, startday,lastday,age = 5){
-  # We create the data frame with waste water data and the viral load.
-  # The optional input age can either be a single multiple of 5 which will 
-  # determine equally sized age groups, or a vector with explicit age groups
-  # of the form "5n - 5m-1".
-  
-  # We start by distributing the viral load over municipalities
-  df_muni <- calc_df_load_municipality(df_posteriors,df_fractions) %>%
-    filter(between(date, startday, lastday)) %>%
-    # Add the vaccinations, age, and hospitalizations
-    left_join(df_vaccins, by = c("municipality","date")) %>%
-    # Extract the lowest age from each age group so that we can reshape the groups
-    mutate(age_group = str_extract(age_group,"^[0-9]+") %>% as.numeric())
-    
-    # Make the new age groups so that we can later group them together
-    # Both approaches probably have better ways to achieve their goal
-    if(is.numeric(age)){
-      df_muni <- df_muni %>%
-        mutate(age_group = paste0(floor(age_group/age)*age," - ",
-                                  age*floor(age_group/age)+age-1)) 
-    } else {
-      for(i in seq_len(length(age))){
-        age_low = str_extract(age[i],"^[0-9]+") %>% as.numeric()
-        age_high = str_extract(age[i],"[0-9]+$") %>% as.numeric()
-        df_muni <- df_muni %>%
-          mutate(age_group = if_else(between(age_group,age_low,age_high),-i*1.,age_group))
-      }
-      df_muni <- df_muni %>% mutate(age_group = age[-age_group])
-    }
-    
-  df_muni <- df_muni %>%
-    group_by(date,municipality,age_group) %>%
-    summarize(load = first(load),
-              percentage_vax = sum(percentage_vax*population)/sum(population),
-              hospitalizations = sum(hospitalizations), 
-              population = sum(population),
-              .groups="drop") %>%
-    mutate(age_group = as.factor(age_group))
-    
-    return(df_muni)
-}
-
-
-calc_vax <- function( startday,lastday,delay_vax){
-  df_vaccins <- read.csv2(vaccin_filename) %>% 
-    # If lastday lies before Januari 6 2021, the code doesn't work
-    filter(between(as.Date(Prikdatum),startday - delay_vax ,max(lastday,as.Date("2021-01-10")))) %>%
-    select("date" = "Prikdatum",
-           "municipality" = "Gemeente",
-           "age_group" = "Geboortecohort",
-           "population" = "Populatie",
-           "percentage_vax" = "Vaccinatiegraad.vaccinatie.gestart") %>%
-    # Percentages kunnen nooit meer dan 1/100% zijn. 
-    mutate(percentage_vax = as.numeric(percentage_vax),
-           percentage_vax = if_else(percentage_vax > 100,1,percentage_vax/100)) %>%
-    # De vaccinaties werken niet direct, verschuif daarom de datum
-    group_by(age_group,municipality) %>%
-    group_split() %>%
-    future_map(function(df){
-      arrange(df,date) %>%
-        mutate(percentage_vax = dplyr::lag(percentage_vax, n = delay_vax, default = 0)) %>%
-        filter(as.Date(date) >= startday)
-    }) %>%
-    bind_rows() %>%
-    ungroup() %>%
-    filter(age_group != "Geboortejaar onbekend" & municipality != "Ontbreekt") %>%
-    # Verander de geboorte-cohorten in leeftijdsgroepen
-    mutate(age_group = 
-             paste0(2020 - as.numeric(str_extract(age_group,"[0-9]{4}$")),
-                    "-",
-                    2020 - as.numeric(str_extract(age_group,"^[0-9]{4}"))),
-           age_group = str_replace(age_group,"-NA","+"),
-           age_group = str_replace(age_group,"^-.*?-","0-"))
-  
-  # Update the final day to match with the vaccin data
-  lastday <- min(as.Date(max(df_vaccins$date)),lastday)
-  
-  # We match each municipality and age_group with the same number of population
-  # independent of the day, hence we make a help-tibble with the populations
-  df_vaccins_pop <- df_vaccins %>%
-    group_by(municipality,age_group) %>%
-    summarize(population = first(population), .groups="drop")
-  
-  # Once we matched the population, we no longer need the population data 
-  # in the vaccination data
-  df_vaccins <- df_vaccins %>%
-    select(-population)
-  
-  df_ziekenhuisopnames <- read.csv(hosp_filename) %>%
-    filter(between(as.Date(AdmissionDate_Pid),startday,lastday)) %>%
-    select("date" = "AdmissionDate_Pid",
-           "municipality" = "Gemeente",
-           "age_group" = "Leeftijdsgroep5",
-           "hospitalizations" = "Hospital_admissions") %>%
-    filter(!is.na(municipality) & (age_group != "Niet vermeld")) %>%
-    # Eerst voegen we de populaties toe aan de vaccinatiedata
-    left_join(df_vaccins_pop,by = c("municipality","age_group")) %>%
-    # Daarna voegen we de vaccinaties toe, en vullen die aan met nullen
-    left_join(df_vaccins,by = c("municipality","age_group","date")) %>%
-    mutate(percentage_vax = if_else(is.na(percentage_vax),0,percentage_vax)) %>%
-    # Namen verbeteren
-    mutate(municipality = str_remove(municipality,"^\'"),           # Den Haag & Bosch 
-           municipality = str_remove(municipality," \\(O\\.\\)"),   # Hengelo
-           municipality = str_replace(municipality,",","."),        # Nuenen etc.
-           municipality = str_replace(municipality,"â","a"),        # Fryslan
-           municipality = str_replace(municipality,"ú","u")) %>%         # Sudwest Fryslan
-    mutate( date=as.Date(date))
-  
-  return(df_ziekenhuisopnames)
-}
-
 read_df_sewage <- function( df_viralload_human_regions ){
   df_viralload_human_regions %>%
     mutate(rwzi = as.factor( RWZI ),
            date = Datum,
-           hospitalizations = Ziekenhuisopnames_NICE,
            concentration = case_when(
              N12_100000_RWZI != 0    ~ log10(N12_100000_RWZI), 
              N12_100000_RWZI == 0    ~ 0,
@@ -163,18 +51,6 @@ initials = function() {
     a_individual = matrix(0.0, ncol = length(levels(df_sewage$rwzi)), 
                           nrow = num_knots + spline_degree - 1)
   )
-}
-
-
-# initialize variables
-initials_hosp = function() {
-  return(list(
-    # mean_hosp_rate = 3.0,
-    # sigma_hosprate = 2,
-    #hosp_rate = rep(2.5, length( unique( df_muni$municipality ))),
-    hosp_rate_age = rep(1,length(levels(df_muni$age_group))),
-    prevention_vax = rep(.8, length( levels( df_muni$age_group)))
-  ))
 }
 
 # colorblind-friendly scheme

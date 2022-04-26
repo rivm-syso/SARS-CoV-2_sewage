@@ -143,6 +143,7 @@ df_posteriors %>%
                sort(decreasing = T) %>%
                .[1:9])) %>%
   arrange(desc(rwzi_persons)) %>%
+  mutate(rwzi = factor(rwzi, unique(rwzi))) %>%
   select( date, load, concentration, rwzi ) %>%
   group_by(rwzi) %>%
   group_split() %>%
@@ -249,6 +250,7 @@ calc_df_load_municipality(df_posteriors,df_fractions) %>%
               sort(decreasing = T) %>%
               .[1:9])) %T>%
   write.csv(here(runname,"output","manuscript","municipalities.csv")) %>%
+  arrange(desc(population)) %>%
   ggplot(mapping = aes(x = date, y = load, ymin = .lower, ymax = .upper)) +
   geom_line(color = cbPalette[5]) +
   geom_ribbon(alpha = 0.25) +

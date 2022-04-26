@@ -67,7 +67,7 @@ summary( fit, pars = c("k", "x0", "sigma_observations", "RWvar", "a_population")
 
 df_posteriors <- fit %>%
   recover_types( df_sewage ) %>%
-  stan_split(10,c("load"),c("load_population","log_likes_water"),startday,lastday) %>%
+  stan_split(10,c("load"),c("load_population"),startday,lastday) %>%
   future_map(function(x){spread_draws(x,load[date,rwzi], x0, k )}) %>%
   bind_rows() %>%
   ungroup() %>%
@@ -80,16 +80,3 @@ save(df_posteriors, df_fractions, df_sewage, file = here( runname, "output", "mo
 # Clean up the enviroment by removing objects we no longer need
 rm(datalist,fit)
 invisible(gc()) # Just to be sure as fit can be rather large
-
-# Removed model selection for now.
-
-# model selection based on expected predictive performance
-# notice that loo_ic does not perform well, presumably bc these
-# are timeseries data. for the moment, rely on waic
-# loo_output = loo(fit, cores = 10, is_method = "psis")
-# loo_output
-# LL <- extract_log_lik(fit, parameter_name='log_likes_water', merge_chains=F)
-# waic(LL)
-# r_eff <- relative_eff(exp(LL), cores = n_chains)
-# loo(LL, r_eff=r_eff)
-# rm(r_eff) # big thing, remove whenever possible
