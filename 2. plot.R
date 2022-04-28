@@ -143,7 +143,8 @@ df_posteriors %>%
                sort(decreasing = T) %>%
                .[1:9])) %>%
   arrange(desc(rwzi_persons)) %>%
-  mutate(rwzi = factor(rwzi, unique(rwzi))) %>%
+  mutate(rwzi = str_to_title(as.character(rwzi)),
+         rwzi = factor(rwzi, unique(rwzi)))
   select( date, load, concentration, rwzi ) %>%
   group_by(rwzi) %>%
   group_split() %>%
@@ -151,8 +152,7 @@ df_posteriors %>%
     group_by(x, date, rwzi, measurement=concentration ) %>% 
     median_qi( load ) %>%
     mutate( zeromeasurement = ifelse(measurement == 0, load, -2),
-            date= as.Date(as.character(date)),
-            rwzi= str_to_title(as.character(rwzi))) })  %>%
+            date= as.Date(as.character(date))) })  %>%
   bind_rows() %T>%
   write.csv(here(runname,"output","manuscript","rwzi.csv")) %>%
   ggplot(mapping = aes(x = date,y = load,ymin = .lower, ymax=.upper) ) +
@@ -251,6 +251,7 @@ calc_df_load_municipality(df_posteriors,df_fractions) %>%
               .[1:9])) %T>%
   write.csv(here(runname,"output","manuscript","municipalities.csv")) %>%
   arrange(desc(population)) %>%
+  mutate(municipality = factor(municipality, unique(municipality))) %>%
   ggplot(mapping = aes(x = date, y = load, ymin = .lower, ymax = .upper)) +
   geom_line(color = cbPalette[5]) +
   geom_ribbon(alpha = 0.25) +
