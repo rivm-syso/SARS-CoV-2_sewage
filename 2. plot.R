@@ -144,7 +144,7 @@ df_posteriors %>%
                .[1:9])) %>%
   arrange(desc(rwzi_persons)) %>%
   mutate(rwzi = str_to_title(as.character(rwzi)),
-         rwzi = factor(rwzi, unique(rwzi)))
+         rwzi = factor(rwzi, unique(rwzi))) %>%
   select( date, load, concentration, rwzi ) %>%
   group_by(rwzi) %>%
   group_split() %>%

@@ -28,9 +28,9 @@ read_df_sewage <- function( df_viralload_human_regions ){
     mutate(rwzi = as.factor( RWZI ),
            date = Datum,
            concentration = case_when(
-             N12_100000_RWZI != 0    ~ log10(N12_100000_RWZI), 
-             N12_100000_RWZI == 0    ~ 0,
-             is.na(N12_100000_RWZI)  ~ -1),
+             RNA_100000_RWZI != 0    ~ log10(RNA_100000_RWZI), 
+             RNA_100000_RWZI == 0    ~ 0,
+             is.na(RNA_100000_RWZI)  ~ -1),
            rwzi_persons = Inwoneraantal,
            municipality_persons = Inwoneraantal_municipality,
            municipality = as.factor( municipality ),
