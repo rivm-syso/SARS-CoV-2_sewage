@@ -1,6 +1,6 @@
 # Modelling patterns of SARS-CoV-2 circulation in the Netherlands, August 2020-February 2022, revealed by a nationwide sewage surveillance program
 
-* [Michiel van Boven](mailto://michiel.van.boven@rivm.nl), Wouter A Hetebrij, Arno N Swart, Erwin Nagelkerke, Rudolf FHJ van der Beek, Sjors Stouten, Rudolf T Hoogeveen, Fuminari Miura, Astrid Kloosterman, Anne-Merel van der Drift, Anne Welling, Willemijn J Lodder, Ana M de Roda-Husman*
+* [Michiel van Boven](mailto://michiel.van.boven@rivm.nl), Wouter A Hetebrij, Arno Swart, Erwin Nagelkerke, Rudolf FHJ van der Beek, Sjors Stouten, Rudolf T Hoogeveen, Fuminari Miura, Astrid Kloosterman, Anne-Merel van der Drift, Anne Welling, Willemijn J Lodder, Ana M de Roda-Husman*
 
 Under review for Epidemics.
 
