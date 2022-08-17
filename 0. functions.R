@@ -7,22 +7,63 @@ load_if_needed <- function( object, filename ){
     load( filename, envir = .GlobalEnv )
 }
 
-download_hospitalization <- function(startday, lastday){
+
+download_hospitalization <- function(startday, lastday, nationwide = T){
   
   download.file("https://data.rivm.nl/covid-19/COVID-19_ziekenhuisopnames.csv",
                 destfile = here(runname, "output", "model_data", "hospitalizations.csv"),
                 mode = "wb")
   
   df_hospital <- read.csv2(here(runname, "output", "model_data", "hospitalizations.csv")) %>%
-    select(date = "Date_of_statistics", "hospitalizations" = "Hospital_admission") %>% 
-    group_by(date) %>% 
-    summarize(hospitalization = sum(hospitalizations), .groups = "drop") %>%
-    mutate(date = as.Date(date),
-           hospitalization = log10(hospitalization)) %>% 
+    select("date" = "Date_of_statistics", "hospitalization" = "Hospital_admission",
+           "municipality" = "Municipality_name") %>%
+    # There are a few difference in municipality names between the open data 
+    # and our own data
+    mutate(municipality = str_remove(municipality,"^\'"),           # Den Haag & Bosch 
+           municipality = str_remove(municipality," \\(O\\.\\)"),   # Hengelo
+           municipality = str_replace(municipality,",","."),        # Nuenen etc.
+           municipality = str_replace(municipality,"â","a"),        # Fryslan
+           municipality = str_replace(municipality,"ú","u")) %>%         # Sudwest Fryslan
+    mutate(date = as.Date(date)) %>%
     filter(between(date,startday,lastday))
   
+  # Aggregate the results if we want the nationwide number of hospitalizations
+  if(nationwide){
+    df_hospital <- df_hospital %>% 
+      group_by(date) %>% 
+      summarize(hospitalization = log10(sum(hospitalization)), .groups = "drop")
+  } else {
+    df_hospital <- df_hospital %>%
+      group_by(municipality) %>%
+      arrange(date) %>%
+      mutate(hospitalization = log10(mean_run(hospitalization,7,-3)))
+  }
+  
   return(df_hospital)
+  
+}
 
+download_testresults <- function(startday, lastday){
+  
+  download.file("https://data.rivm.nl/covid-19/COVID-19_aantallen_gemeente_per_dag.csv",
+                destfile = here(runname, "output", "model_data", "tests_results.csv"),
+                mode = "wb")
+  
+  df_hospital <- read.csv2(here(runname, "output", "model_data", "tests_results.csv")) %>%
+    select("date" = "Date_of_publication", "test" = "Total_reported",
+           "municipality" = "Municipality_name") %>%
+    # There are a few difference in municipality names between the open data 
+    # and our own data
+    mutate(municipality = str_remove(municipality,"^\'"),           # Den Haag & Bosch 
+           municipality = str_remove(municipality," \\(O\\.\\)"),   # Hengelo
+           municipality = str_replace(municipality,",","."),        # Nuenen etc.
+           municipality = str_replace(municipality,"â","a"),        # Fryslan
+           municipality = str_replace(municipality,"ú","u")) %>%         # Sudwest Fryslan
+    mutate(date = as.Date(date)) %>%
+    filter(between(date,startday,lastday))
+
+  return(df_hospital)
+  
 }
 
 calc_df_load_municipality <- function(df_posteriors,df_fractions){
