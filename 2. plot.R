@@ -4,6 +4,7 @@ library( patchwork )
 library( here )
 library( furrr )
 library( stringr )
+library( runner )
 
 if(!exists("functions_sourced")){
   source( "0. functions.R" )
@@ -65,18 +66,21 @@ df_posteriors %>%         # group_by(..) %>% group_split is more robust than gro
   median_qi( weighted_concentration ) %>%
   left_join(download_hospitalization(startday,lastday), by = "date") %T>%
   write.csv(here(runname,"output","Netherlands","posterior.csv")) %>%
+  mutate(hospitalization = hospitalization - log10(df_fractions %>%
+                                                     summarize(pop =  sum(municipality_pop)) %>%
+                                                     pull(pop)) + 5) %>%
   ggplot( aes( x = date, y = weighted_concentration,
                ymin = .lower, ymax = .upper ) ) +
   geom_ribbon(alpha = 0.25) +
   geom_line( color = cbPalette[5] ) +
-  geom_point(aes(y = 10.5 + hospitalization), color = cbPalette[1], size = .5) +
+  geom_point(aes(y = 12.7 + hospitalization), color = cbPalette[1], size = .5) +
 #  labs( title = "Viral load in the Netherlands",
 #       subtitle = "1 August 2020 - 8 February  2022") +
   coord_cartesian(ylim = c(11, 15)) +
   scale_x_date( "Date", breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
   scale_y_continuous(name = expression(paste("Log"[10],"(load) (10"^"-5"," persons"^"-1",")")),
-                     sec.axis = sec_axis(function(x){x-10.5},
-                                         expression(paste("Log"[10],"(hospitalizations)")) )) +
+                     sec.axis = sec_axis(function(x){x-12.7},
+                                         expression(paste("Log"[10],"(hospitalizations) (10"^"-5"," persons"^"-1",")")) )) +
   theme_bw(base_size = 15) +
   theme(
     plot.title = element_text(color = cbPalette[5] ),
@@ -278,6 +282,113 @@ calc_df_load_municipality(df_posteriors,df_fractions) %>%
 ggsave(here( runname, "figures", "manuscript", "figure3_9municipalities.png" ),width = 16, height = 11,units = "in")
 ggsave(here( runname, "figures", "manuscript", "figure3_9municipalities.tiff" ),width = 16, height = 11,units = "in")
 ggsave(here( runname, "figures", "manuscript", "figure3_9municipalities.svg" ),width = 16, height = 11,units = "in")
+
+###
+# make two supplementary figures for manuscript of largest municipalities and 
+# hospitalizations or positive tests
+### 
+
+### Hospitalizations
+
+calc_df_load_municipality(df_posteriors, df_fractions) %>%
+  left_join(df_fractions %>%
+              group_by(municipality) %>%
+              summarize(population = first(municipality_pop) / first(frac_municipality2RWZI)),
+            by = "municipality") %>%
+  filter(population %in%
+           (df_fractions %>%
+              group_by(municipality) %>%
+              summarize(population = first(municipality_pop) / first(frac_municipality2RWZI)) %>%
+              .$population %>%
+              sort(decreasing = T) %>%
+              .[1:9])) %>%
+  left_join(download_hospitalization(startday,lastday,FALSE), by = c("municipality","date")) %T>%
+  write.csv(here(runname,"output","manuscript","municipalities_hosp.csv")) %>%
+  arrange(desc(population)) %>%
+  mutate(hospitalization_zero = if_else(is.infinite(hospitalization),11,NA_real_),
+         hospitalization = if_else(is.infinite(hospitalization),NA_real_,
+                                   # Log Hospitalization per 100.000 inhabitants
+                                   hospitalization - log10(population) + 5), 
+         municipality = if_else(municipality == "s-Gravenhage","The Hague",municipality),
+         municipality = factor(municipality, unique(municipality))) %>%
+  ggplot(mapping = aes(x = date, y = load, ymin = .lower, ymax = .upper)) +
+  geom_line(color = cbPalette[5]) +
+  geom_point(aes(y = 11 + 2 * (hospitalization + 1.8) / 2.5), color = cbPalette[1], size = .5) +
+  geom_point(aes(y = hospitalization_zero), color = cbPalette[6], size = .5) + 
+  geom_ribbon(alpha = 0.25) +
+  coord_cartesian(ylim = c(11, 15)) +
+  scale_x_date( "Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
+  scale_y_continuous(name = expression(paste("Log"[10],"(load) (10"^"-5"," persons"^"-1",")")),
+                     sec.axis = sec_axis(function(x){ 2.5 *(x - 11) / 2 - 1.8},
+                                         expression(paste("Log"[10],"(hospitalizations) (10"^"-5"," persons"^"-1",")"))  )) +
+  theme_bw(base_size = 20) +
+  theme(
+    plot.title = element_text(color = cbPalette[5] ),
+    plot.subtitle = element_text(color = cbPalette[5] ),
+    axis.title.y.left = element_text(color = cbPalette[5]),
+    axis.title.y.right = element_text(color = cbPalette[1]),
+    panel.grid.major = element_line(size = 0.7),
+    panel.grid.minor = element_blank(),
+    legend.position = "none") +
+  facet_wrap(vars(municipality), ncol = 3) +
+  theme(strip.background = element_blank(),
+        strip.text = element_text(color = cbPalette[5],size = 30),
+        axis.title = element_text(size = 30))
+
+ggsave(  here( runname, "figures", "manuscript", "figure2_9plants_hospitalizations.png"),width = 16, height = 11, units = "in")
+ggsave(  here( runname, "figures", "manuscript", "figure2_9plants_hospitalizations.tiff"),width = 16, height = 11, units = "in")
+ggsave(  here( runname, "figures", "manuscript", "figure2_9plants_hospitalizations.svg"),width = 16, height = 11, units = "in")
+
+### Positive tests
+
+calc_df_load_municipality(df_posteriors, df_fractions) %>%
+  left_join(df_fractions %>%
+              group_by(municipality) %>%
+              summarize(population = first(municipality_pop) / first(frac_municipality2RWZI)),
+            by = "municipality") %>%
+  filter(population %in%
+           (df_fractions %>%
+              group_by(municipality) %>%
+              summarize(population = first(municipality_pop) / first(frac_municipality2RWZI)) %>%
+              .$population %>%
+              sort(decreasing = T) %>%
+              .[1:9])) %>%
+  left_join(download_testresults(startday,lastday), by = c("municipality","date")) %T>%
+  write.csv(here(runname,"output","manuscript","municipalities_tests.csv")) %>%
+  ungroup() %>% 
+  arrange(desc(population)) %>%
+  mutate(municipality = if_else(municipality == "s-Gravenhage","The Hague",municipality),
+         municipality = factor(municipality, unique(municipality))) %>%
+  ggplot(mapping = aes(x = date, y = load, ymin = .lower, ymax = .upper)) +
+  geom_line(color = cbPalette[5]) +
+  geom_point(aes(y = 10.5 + log10(test)), 
+             color = cbPalette[1], size = .5) +
+  geom_ribbon(alpha = 0.25) +
+  coord_cartesian(ylim = c(11, 15)) +
+  scale_x_date( "Date",  breaks = seq.Date(startday,lastday, by = "3 months"), date_labels = "%m/%y") + 
+  scale_y_continuous(name = expression(paste("Log"[10],"(load) (10"^"-5"," persons"^"-1",")")),
+                     sec.axis = sec_axis(function(x){x - 10.5}, 
+                                         expression(paste("Log"[10],"(Reported positive tests)")) )) +
+  theme_bw(base_size = 20) +
+  theme(
+    plot.title = element_text(color = cbPalette[5] ),
+    plot.subtitle = element_text(color = cbPalette[5] ),
+    axis.title.y.left = element_text(color = cbPalette[5]),
+    axis.title.y.right = element_text(color = cbPalette[1]),
+    panel.grid.major = element_line(size = 0.7),
+    panel.grid.minor = element_blank(),
+    legend.position = "none") +
+  facet_wrap(vars(municipality), ncol = 3) +
+  theme(strip.background = element_blank(),
+        strip.text = element_text(color = cbPalette[5],size = 30),
+        axis.title = element_text(size = 30))
+
+ggsave(  here( runname, "figures", "manuscript", "figure2_9plants_tests.png"),width = 16, height = 11, units = "in")
+ggsave(  here( runname, "figures", "manuscript", "figure2_9plants_tests.tiff"),width = 16, height = 11, units = "in")
+ggsave(  here( runname, "figures", "manuscript", "figure2_9plants_tests.svg"),width = 16, height = 11, units = "in")
+
+
+
 
 ###
 # Plots by safety region

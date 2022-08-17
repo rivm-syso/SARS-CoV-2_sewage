@@ -2,7 +2,7 @@
 
 * [Michiel van Boven](mailto://michiel.van.boven@rivm.nl), Wouter A Hetebrij, Arno Swart, Erwin Nagelkerke, Rudolf FHJ van der Beek, Sjors Stouten, Rudolf T Hoogeveen, Fuminari Miura, Astrid Kloosterman, Anne-Merel van der Drift, Anne Welling, Willemijn J Lodder, Ana M de Roda-Husman*
 
-Under review for Epidemics.
+Under review with Eurosurveillance.
 
 ---
 
@@ -37,3 +37,7 @@ Clone the repository into a local directory, open the project file `wastewater.R
 4. `source("2. plot.R")`, creates plots and stores them in `./figures/`
 
 Make sure to have all needed libraries installed. In particular this code relies on [stan](https://mc-stan.org/)
+
+## Notice
+
+Notice that STP samples in which no RNA was detected are indicated in the figures (directory 'RWZI' in the figures zipfile) with an open circle plotted on the posterior median of the STP virus loads.  
