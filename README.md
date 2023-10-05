@@ -1,8 +1,8 @@
-# Modelling patterns of SARS-CoV-2 circulation in the Netherlands, August 2020-February 2022, revealed by a nationwide sewage surveillance program
+# Patterns of SARS-CoV-2 circulation revealed by a nationwide sewage surveillance programme, the Netherlands, August 2020 to February 2022
 
 * [Michiel van Boven](mailto://michiel.van.boven@rivm.nl), Wouter A Hetebrij, Arno Swart, Erwin Nagelkerke, Rudolf FHJ van der Beek, Sjors Stouten, Rudolf T Hoogeveen, Fuminari Miura, Astrid Kloosterman, Anne-Merel van der Drift, Anne Welling, Willemijn J Lodder, Ana M de Roda-Husman*
 
-Under review with Eurosurveillance.
+Published in [Eurosurveillance 2023;28(25)]( https://doi.org/10.2807/1560-7917.ES.2023.28.25.2200700)
 
 ---
 
